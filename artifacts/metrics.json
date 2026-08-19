@@ -1,0 +1,10 @@
+{
+  "model_version": "1.0.0",
+  "train_rows": 464,
+  "calibration_rows": 117,
+  "test_rows": 146,
+  "mae_million": 4883.64070989854,
+  "rmse_million": 9650.590842368856,
+  "r2": -0.040577499325873845,
+  "mape_percent": 49.63139344234085
+}
