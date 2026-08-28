@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -42,7 +42,10 @@ with st.form("prediction"):
                 "Đông Nam", "Đông Bắc", "Tây Nam", "Tây Bắc",
             ],
         )
-        position = st.selectbox("Vị trí", ["Không rõ", "Trong hẻm", "Đường chính"])
+        position = st.selectbox(
+            "Vị trí",
+            ["Không rõ", "Trong hẻm", "Đường chính"],
+        )
     amenities = st.multiselect(
         "Tiện ích/đặc điểm",
         ["Có nội thất", "Hẻm ô tô", "Gần chợ", "Gần trường", "Bán gấp"],
@@ -80,13 +83,21 @@ if submitted:
             f"{result['lower_bound_million'] / 1000:,.2f}–"
             f"{result['upper_bound_million'] / 1000:,.2f} tỷ",
         )
-        confidence_labels = {"low": "THẤP", "medium": "TRUNG BÌNH", "high": "CAO"}
+        confidence_labels = {
+            "low": "THẤP",
+            "medium": "TRUNG BÌNH",
+            "high": "CAO",
+        }
         confidence_column.metric(
             "Độ tin cậy",
             confidence_labels[result["confidence"]],
         )
         if result["warnings"]:
             st.warning("\n".join(result["warnings"]))
+        st.progress(
+            result["data_quality_score"] / 100,
+            text=f"Điểm chất lượng dữ liệu: {result['data_quality_score']:.0f}/100",
+        )
         segment_price = result["segment_median_unit_price_million_m2"]
         if segment_price is not None:
             st.info(

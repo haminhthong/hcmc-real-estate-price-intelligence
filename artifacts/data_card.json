@@ -1,0 +1,19 @@
+{
+  "source_file": "data_public_sample.csv",
+  "rows_raw": 2500,
+  "rows_after_cleaning": 727,
+  "date_min": "2025-05-03T21:29:00",
+  "date_max": "2025-09-30T18:27:00",
+  "residential_property_types": [
+    "Căn hộ chung cư",
+    "Nhà riêng"
+  ],
+  "unknown_location_percent": 25.584594222833562,
+  "coordinates_available_percent": 27.097661623108664,
+  "target": "Price (triệu VND, giá đăng)",
+  "known_limitations": [
+    "Dữ liệu là giá đăng, không phải giá giao dịch.",
+    "Địa chỉ và tọa độ còn thiếu ở một phần đáng kể bản ghi.",
+    "Dữ liệu mẫu không đại diện đầy đủ cho toàn bộ thị trường TP.HCM."
+  ]
+}

@@ -6,6 +6,8 @@ import pandas as pd
 
 from .config import RESIDENTIAL_TYPES
 
+CRAWL_DATE = pd.Timestamp("2025-09-30 23:59:59")
+
 
 def _normalize_text(value: object) -> str:
     """Chuẩn hóa văn bản để nhận diện địa danh ổn định hơn."""
@@ -81,8 +83,16 @@ def clean_data(raw: pd.DataFrame) -> pd.DataFrame:
     df = df[df["Property Type"].isin(RESIDENTIAL_TYPES)].copy()
     df["location_area"] = df["Location"].map(extract_area)
     numeric_columns = [
-        "Price", "Area", "Bedrooms", "Bathrooms", "Floors",
-        "Width", "Length", "Alley Width",
+        "Price",
+        "Area",
+        "Bedrooms",
+        "Bathrooms",
+        "Floors",
+        "Width",
+        "Length",
+        "Alley Width",
+        "Latitude",
+        "Longitude",
     ]
     for column in numeric_columns:
         if column not in df:
@@ -102,6 +112,24 @@ def clean_data(raw: pd.DataFrame) -> pd.DataFrame:
         & (df["Alley Width"].isna() | df["Alley Width"].between(0, 30))
     )
     df = df.loc[valid].copy()
+    valid_coordinates = (
+        df["Latitude"].between(10.3, 11.2)
+        & df["Longitude"].between(106.3, 107.0)
+    )
+    df.loc[~valid_coordinates, ["Latitude", "Longitude"]] = np.nan
+
+    if "Last Updated Date" in df:
+        df["listing_date"] = pd.to_datetime(
+            df["Last Updated Date"],
+            format="%d/%m/%Y %H:%M",
+            errors="coerce",
+        )
+    else:
+        df["listing_date"] = pd.NaT
+    earliest_date = df["listing_date"].min()
+    df["listing_date"] = df["listing_date"].fillna(
+        earliest_date if pd.notna(earliest_date) else CRAWL_DATE
+    )
     df["property_group_id"] = _make_property_group_id(df)
     df = df.drop_duplicates("property_group_id")
     return df.reset_index(drop=True)

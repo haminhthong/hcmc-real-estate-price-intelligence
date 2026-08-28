@@ -12,6 +12,23 @@ def test_health_schema():
     assert set(response.json()) == {"status", "model_loaded"}
 
 
+def test_model_info_uses_saved_artifact(monkeypatch):
+    monkeypatch.setattr(
+        api_module,
+        "load_model",
+        lambda: {
+            "version": "1.0.0",
+            "supported_areas": ["Quận 1"],
+            "supported_property_types": ["Nhà riêng"],
+            "split_protocol": "grouped temporal 64/16/20",
+            "target_coverage": 0.8,
+        },
+    )
+    response = client.get("/model-info")
+    assert response.status_code == 200
+    assert response.json()["split_protocol"] == "grouped temporal 64/16/20"
+
+
 def test_invalid_area_is_rejected():
     payload = {"Property Type": "Nhà riêng", "location_area": "Hà Nội", "Area": 50, "Bedrooms": 2}
     assert client.post("/predict", json=payload).status_code == 422
@@ -44,6 +61,7 @@ def test_prediction_response_schema(monkeypatch):
         "confidence": "medium",
         "model_version": "1.0.0",
         "warnings": [],
+        "data_quality_score": 80.0,
         "top_contributions": [],
         "segment_median_unit_price_million_m2": 98.0,
         "disclaimer": "Giá tham khảo.",

@@ -4,6 +4,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "data" / "sample" / "data_public_sample.csv"
 MODEL_PATH = ROOT / "models" / "price_model.joblib"
 METRICS_PATH = ROOT / "artifacts" / "metrics.json"
+MODEL_COMPARISON_PATH = ROOT / "artifacts" / "model_comparison.json"
+ERROR_ANALYSIS_PATH = ROOT / "artifacts" / "error_analysis.json"
+DATA_CARD_PATH = ROOT / "artifacts" / "data_card.json"
 MODEL_VERSION = "1.0.0"
 RANDOM_STATE = 42
 
@@ -15,7 +18,20 @@ SUPPORTED_AREAS = [
     "Huyện Bình Chánh", "Huyện Cần Giờ", "Huyện Củ Chi", "Huyện Hóc Môn", "Huyện Nhà Bè", "Unknown",
 ]
 
-NUMERIC_FEATURES = ["Area", "Bedrooms", "Bathrooms", "Floors", "Width", "Length", "Alley Width"]
+NUMERIC_FEATURES = [
+    "Area",
+    "Bedrooms",
+    "Bathrooms",
+    "Floors",
+    "Width",
+    "Length",
+    "Alley Width",
+    "Latitude",
+    "Longitude",
+    "distance_to_cbd_km",
+    "listing_age_days",
+    "data_quality_score",
+]
 CATEGORICAL_FEATURES = ["Property Type", "location_area", "Direction", "Position"]
 FLAG_FEATURES = ["has_furniture", "car_alley", "near_market", "near_school", "is_urgent_sale"]
 MODEL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES + FLAG_FEATURES

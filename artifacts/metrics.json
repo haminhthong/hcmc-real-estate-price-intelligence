@@ -1,10 +1,12 @@
 {
   "model_version": "1.0.0",
-  "train_rows": 464,
-  "calibration_rows": 117,
+  "train_rows": 465,
+  "calibration_rows": 116,
   "test_rows": 146,
-  "mae_million": 4883.64070989854,
-  "rmse_million": 9650.590842368856,
-  "r2": -0.040577499325873845,
-  "mape_percent": 49.63139344234085
+  "mae_million": 4947.821206923935,
+  "rmse_million": 7367.6545371788225,
+  "r2": 0.246271480713667,
+  "mape_percent": 65.82671700710311,
+  "prediction_interval_target_coverage": 0.8,
+  "prediction_interval_test_coverage": 0.7534246575342466
 }

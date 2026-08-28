@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.config import MODEL_PATH, MODEL_VERSION, RESIDENTIAL_TYPES, SUPPORTED_AREAS
-from src.predict import predict_one
+from src.predict import load_model, predict_one
 
 app = FastAPI(title="HCMC Real Estate Price Intelligence", version=MODEL_VERSION)
 
@@ -23,6 +23,8 @@ class PredictionRequest(BaseModel):
     width: float | None = Field(default=None, gt=0, le=100, alias="Width")
     length: float | None = Field(default=None, gt=0, le=200, alias="Length")
     alley_width: float | None = Field(default=None, ge=0, le=30, alias="Alley Width")
+    latitude: float | None = Field(default=None, ge=10.3, le=11.2, alias="Latitude")
+    longitude: float | None = Field(default=None, ge=106.3, le=107.0, alias="Longitude")
     direction: str = Field(default="Không rõ", alias="Direction")
     position: str = Field(default="Không rõ", alias="Position")
     has_furniture: bool = False
@@ -55,6 +57,7 @@ class PredictionResponse(BaseModel):
     confidence: Literal["low", "medium", "high"]
     model_version: str
     warnings: list[str]
+    data_quality_score: float = Field(ge=0, le=100)
     top_contributions: list[dict]
     segment_median_unit_price_million_m2: float | None
     disclaimer: str
@@ -67,11 +70,17 @@ def health() -> dict[str, str | bool]:
 
 @app.get("/model-info")
 def model_info() -> dict:
+    artifact = load_model()
     return {
-        "model_version": MODEL_VERSION,
+        "model_version": artifact["version"],
         "model_type": "RandomForestRegressor",
-        "supported_areas": SUPPORTED_AREAS,
-        "supported_property_types": RESIDENTIAL_TYPES,
+        "supported_areas": artifact.get("supported_areas", SUPPORTED_AREAS),
+        "supported_property_types": artifact.get(
+            "supported_property_types",
+            RESIDENTIAL_TYPES,
+        ),
+        "split_protocol": artifact.get("split_protocol"),
+        "prediction_interval_target_coverage": artifact.get("target_coverage"),
     }
 
 

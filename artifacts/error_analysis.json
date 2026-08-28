@@ -1,0 +1,86 @@
+{
+  "by_property_type": {
+    "Căn hộ chung cư": {
+      "count": 10,
+      "mean": 2074.77,
+      "median": 1015.6
+    },
+    "Nhà riêng": {
+      "count": 136,
+      "mean": 5159.07,
+      "median": 2950.5
+    }
+  },
+  "by_location_area": {
+    "Huyện Bình Chánh": {
+      "count": 1,
+      "mean": 2126.75,
+      "median": 2126.75
+    },
+    "Huyện Cần Giờ": {
+      "count": 2,
+      "mean": 4303.95,
+      "median": 4303.95
+    },
+    "Huyện Nhà Bè": {
+      "count": 2,
+      "mean": 800.67,
+      "median": 800.67
+    },
+    "Quận 1": {
+      "count": 2,
+      "mean": 7758.65,
+      "median": 7758.65
+    },
+    "Quận 10": {
+      "count": 3,
+      "mean": 8497.92,
+      "median": 9390.77
+    },
+    "Quận 6": {
+      "count": 1,
+      "mean": 7259.7,
+      "median": 7259.7
+    },
+    "Quận 7": {
+      "count": 1,
+      "mean": 378.38,
+      "median": 378.38
+    },
+    "Quận 8": {
+      "count": 2,
+      "mean": 1841.96,
+      "median": 1841.96
+    },
+    "Quận Bình Thạnh": {
+      "count": 4,
+      "mean": 4425.24,
+      "median": 3784.38
+    },
+    "Quận Bình Tân": {
+      "count": 10,
+      "mean": 1786.6,
+      "median": 861.5
+    },
+    "Quận Gò Vấp": {
+      "count": 1,
+      "mean": 904.76,
+      "median": 904.76
+    },
+    "Quận Tân Phú": {
+      "count": 7,
+      "mean": 3351.14,
+      "median": 2185.99
+    },
+    "TP. Thủ Đức": {
+      "count": 13,
+      "mean": 3200.49,
+      "median": 2365.4
+    },
+    "Unknown": {
+      "count": 97,
+      "mean": 5733.78,
+      "median": 3168.51
+    }
+  }
+}

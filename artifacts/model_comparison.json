@@ -1,0 +1,33 @@
+{
+  "selection_split": "calibration",
+  "selection_metric": "mae_million",
+  "champion": "random_forest",
+  "calibration": {
+    "baseline_median": {
+      "mae_million": 3666.7241379310344,
+      "rmse_million": 6617.209016829815,
+      "r2": -0.12702747203866682,
+      "mape_percent": 49.85185774404894
+    },
+    "random_forest": {
+      "mae_million": 3570.1185269984744,
+      "rmse_million": 5892.856227388833,
+      "r2": 0.10620794989199878,
+      "mape_percent": 65.05158500162489
+    }
+  },
+  "test_report_only": {
+    "baseline_median": {
+      "mae_million": 6466.027397260274,
+      "rmse_million": 10091.975450482956,
+      "r2": -0.41419341627016815,
+      "mape_percent": 61.259379134302726
+    },
+    "random_forest": {
+      "mae_million": 4947.821206923935,
+      "rmse_million": 7367.6545371788225,
+      "r2": 0.246271480713667,
+      "mape_percent": 65.82671700710311
+    }
+  }
+}

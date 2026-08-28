@@ -59,3 +59,12 @@ def test_duplicate_rows_without_listing_id_share_one_group():
     frame = sample_df().drop(columns="Listing ID")
     duplicated = pd.concat([frame.iloc[[0]], frame.iloc[[0]]], ignore_index=True)
     assert len(clean_data(duplicated)) == 1
+
+
+def test_spatial_and_quality_features_are_created():
+    frame = pd.DataFrame(
+        [{"Latitude": 10.7769, "Longitude": 106.7009, "Bedrooms": 2}]
+    )
+    features = make_features(frame)
+    assert features.loc[0, "distance_to_cbd_km"] < 0.1
+    assert 0 < features.loc[0, "data_quality_score"] < 100
