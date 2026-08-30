@@ -2,85 +2,85 @@
   "by_property_type": {
     "Căn hộ chung cư": {
       "count": 10,
-      "mean": 2074.77,
-      "median": 1015.6
+      "mean": 2097.49,
+      "median": 1015.06
     },
     "Nhà riêng": {
       "count": 136,
-      "mean": 5159.07,
-      "median": 2950.5
+      "mean": 5140.78,
+      "median": 2947.16
     }
   },
   "by_location_area": {
     "Huyện Bình Chánh": {
       "count": 1,
-      "mean": 2126.75,
-      "median": 2126.75
+      "mean": 2134.34,
+      "median": 2134.34
     },
     "Huyện Cần Giờ": {
       "count": 2,
-      "mean": 4303.95,
-      "median": 4303.95
+      "mean": 4307.96,
+      "median": 4307.96
     },
     "Huyện Nhà Bè": {
       "count": 2,
-      "mean": 800.67,
-      "median": 800.67
+      "mean": 800.2,
+      "median": 800.2
     },
     "Quận 1": {
       "count": 2,
-      "mean": 7758.65,
-      "median": 7758.65
+      "mean": 7707.71,
+      "median": 7707.71
     },
     "Quận 10": {
       "count": 3,
-      "mean": 8497.92,
-      "median": 9390.77
+      "mean": 8488.98,
+      "median": 9416.77
     },
     "Quận 6": {
       "count": 1,
-      "mean": 7259.7,
-      "median": 7259.7
+      "mean": 7267.28,
+      "median": 7267.28
     },
     "Quận 7": {
       "count": 1,
-      "mean": 378.38,
-      "median": 378.38
+      "mean": 360.53,
+      "median": 360.53
     },
     "Quận 8": {
       "count": 2,
-      "mean": 1841.96,
-      "median": 1841.96
+      "mean": 1836.89,
+      "median": 1836.89
     },
     "Quận Bình Thạnh": {
       "count": 4,
-      "mean": 4425.24,
-      "median": 3784.38
+      "mean": 4426.9,
+      "median": 3756.05
     },
     "Quận Bình Tân": {
       "count": 10,
-      "mean": 1786.6,
-      "median": 861.5
+      "mean": 1758.94,
+      "median": 823.45
     },
     "Quận Gò Vấp": {
       "count": 1,
-      "mean": 904.76,
-      "median": 904.76
+      "mean": 937.84,
+      "median": 937.84
     },
     "Quận Tân Phú": {
       "count": 7,
-      "mean": 3351.14,
-      "median": 2185.99
+      "mean": 3378.01,
+      "median": 2299.2
     },
     "TP. Thủ Đức": {
       "count": 13,
-      "mean": 3200.49,
-      "median": 2365.4
+      "mean": 3263.18,
+      "median": 2460.57
     },
     "Unknown": {
       "count": 97,
-      "mean": 5733.78,
-      "median": 3168.51
+      "mean": 5703.96,
+      "median": 3292.11
     }
   }
 }

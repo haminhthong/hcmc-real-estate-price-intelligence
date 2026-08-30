@@ -3,10 +3,10 @@
   "train_rows": 465,
   "calibration_rows": 116,
   "test_rows": 146,
-  "mae_million": 4947.821206923935,
-  "rmse_million": 7367.6545371788225,
-  "r2": 0.246271480713667,
-  "mape_percent": 65.82671700710311,
+  "mae_million": 4932.333461687149,
+  "rmse_million": 7344.486968197429,
+  "r2": 0.25100422236992315,
+  "mape_percent": 65.5278085678247,
   "prediction_interval_target_coverage": 0.8,
-  "prediction_interval_test_coverage": 0.7534246575342466
+  "prediction_interval_test_coverage": 0.7602739726027398
 }

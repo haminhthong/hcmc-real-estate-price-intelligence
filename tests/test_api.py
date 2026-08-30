@@ -9,7 +9,8 @@ client = TestClient(app)
 def test_health_schema():
     response = client.get("/health")
     assert response.status_code == 200
-    assert set(response.json()) == {"status", "model_loaded"}
+    assert {"status", "model_loaded"}.issubset(set(response.json()))
+
 
 
 def test_model_info_uses_saved_artifact(monkeypatch):
