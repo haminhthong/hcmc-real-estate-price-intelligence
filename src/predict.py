@@ -8,7 +8,7 @@ khoảng tin cậy conformal, mức độ tin cậy (low, medium, high) và trí
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any
 
 import joblib
 import numpy as np
@@ -19,7 +19,7 @@ from .feature_engineering import make_features
 
 
 @lru_cache(maxsize=1)
-def load_model(path: Path = MODEL_PATH) -> Dict[str, Any]:
+def load_model(path: Path = MODEL_PATH) -> dict[str, Any]:
     """Tải và lưu vào bộ nhớ tạm (LRU cache) gói mô hình đã được huấn luyện.
 
     Args:
@@ -36,7 +36,7 @@ def load_model(path: Path = MODEL_PATH) -> Dict[str, Any]:
         logger.error("Không tìm thấy file mô hình tại đường dẫn: %s", path)
         raise FileNotFoundError("Chưa có mô hình. Hãy chạy: python -m src.train")
 
-    model_package: Dict[str, Any] = joblib.load(path)
+    model_package: dict[str, Any] = joblib.load(path)
     required_keys = {"pipeline", "version", "features"}
     if not required_keys.issubset(model_package):
         logger.error("File mô hình không đúng cấu trúc: thiếu %s", required_keys - set(model_package))
@@ -45,7 +45,10 @@ def load_model(path: Path = MODEL_PATH) -> Dict[str, Any]:
     return model_package
 
 
-def predict_one(values: Dict[str, Any]) -> Dict[str, Any]:
+def predict_one(
+    values: dict[str, Any],
+    include_explanation: bool = False,
+) -> dict[str, Any]:
     """Dự báo giá cho một bất động sản và trả về thông tin bổ trợ diễn giải.
 
     Quy trình:
@@ -54,15 +57,16 @@ def predict_one(values: Dict[str, Any]) -> Dict[str, Any]:
     3. Dự báo giá điểm trung tâm (point prediction) và quy đổi từ log-scale.
     4. Xác định khoảng tin cậy conformal `[lower_bound, upper_bound]` (Target Coverage 80%).
     5. Quét kiểm tra cảnh báo (Out of bounds, missing coordinates, low quality score).
-    6. Trích xuất 5 đặc trưng ảnh hưởng mạnh nhất qua SHAP (`explain_top_features`).
+    6. Trích xuất 5 đặc trưng ảnh hưởng mạnh nhất qua SHAP nếu include_explanation=True.
     7. Tra cứu đơn giá trung vị phân khúc cùng loại hình x khu vực.
 
     Args:
         values: Dictionary chứa các trường thuộc tính của bất động sản.
+        include_explanation: Tùy chọn tính toán đặc trưng SHAP (mặc định False để tối ưu CPU).
 
     Returns:
-        Dict phản hồi đầy đủ các thông tin dự báo, khoảng tin cậy, mức độ tin cậy,
-        cảnh báo, điểm chất lượng và phân tích SHAP.
+        Dict phản hồi đầy đủ các thông tin dự báo, khoảng tin cậy, chỉ báo độ tin cậy,
+        cảnh báo, điểm chất lượng và phân tích SHAP (nếu có).
     """
     model_package = load_model()
     row = pd.DataFrame([values])
@@ -80,11 +84,13 @@ def predict_one(values: Dict[str, Any]) -> Dict[str, Any]:
     )
     upper_bound = float(np.expm1(log_prediction + error_quantile))
 
-    # Quét cảnh báo tính hợp lệ và phạm vi huấn luyện
-    warnings: List[str] = []
+    # So sánh cả đặc trưng gốc và đặc trưng được tạo với phạm vi huấn luyện.
+    warnings: list[str] = []
     for feature, bounds in model_package.get("training_ranges", {}).items():
-        value = values.get(feature)
-        if value is not None and not bounds[0] <= float(value) <= bounds[1]:
+        value = feature_frame.iloc[0].get(feature)
+        if pd.notna(value) and np.isfinite(float(value)) and not (
+            bounds[0] <= float(value) <= bounds[1]
+        ):
             warnings.append(
                 f"CẢNH BÁO PHẠM VI: Đặc trưng '{feature}'={value} nằm ngoài ngưỡng huấn luyện "
                 f"({bounds[0]:g}–{bounds[1]:g})."
@@ -106,7 +112,7 @@ def predict_one(values: Dict[str, Any]) -> Dict[str, Any]:
             f"CẢNH BÁO DỮ LIỆU THIẾU: Dữ liệu đầu vào chưa đầy đủ (Điểm chất lượng {data_quality_score:.0f}/100)."
         )
 
-    # Đánh giá mức độ tin cậy (Confidence Level: Low / Medium / High)
+    # Chỉ báo heuristic dựa trên cảnh báo và độ rộng tương đối của khoảng dự báo.
     relative_width = (upper_bound - lower_bound) / max(predicted_price, 1)
     if warnings or relative_width > 0.8:
         confidence = "low"
@@ -120,8 +126,13 @@ def predict_one(values: Dict[str, Any]) -> Dict[str, Any]:
         (property_type, location_area)
     )
 
-    # Tính toán SHAP values
-    contributions = explain_top_features(model_package, feature_frame)
+    # Chỉ tính SHAP khi người dùng hoặc API chủ động yêu cầu.
+    should_explain = include_explanation or values.get("include_explanation", False)
+    contributions = (
+        explain_top_features(model_package, feature_frame)
+        if should_explain
+        else []
+    )
 
     return {
         "predicted_price_million": round(predicted_price, 1),
@@ -145,9 +156,9 @@ def predict_one(values: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def explain_top_features(
-    model_package: Dict[str, Any],
+    model_package: dict[str, Any],
     feature_frame: pd.DataFrame,
-) -> List[Dict[str, Union[str, float]]]:
+) -> list[dict[str, str | float]]:
     """Sử dụng SHAP TreeExplainer trích xuất 5 đặc trưng ảnh hưởng lớn nhất tới quyết định định giá.
 
     Args:
@@ -170,9 +181,8 @@ def explain_top_features(
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(transformed)
     except ImportError as exc:
-        logger.error("Thiếu thư viện 'shap'. Vui lòng kiểm tra lại môi trường venv.")
         raise RuntimeError(
-            "Thiếu thư viện SHAP để giải thích mô hình. Vui lòng cài lại requirements.txt."
+            "Thiếu thư viện SHAP để giải thích mô hình. Hãy cài requirements.txt."
         ) from exc
 
     scores = np.asarray(shap_values)[0]
@@ -185,4 +195,3 @@ def explain_top_features(
         }
         for index in top_indices
     ]
-

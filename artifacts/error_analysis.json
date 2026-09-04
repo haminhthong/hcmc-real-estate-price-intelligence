@@ -1,86 +1,86 @@
 {
   "by_property_type": {
     "Căn hộ chung cư": {
-      "count": 10,
-      "mean": 2097.49,
-      "median": 1015.06
+      "count": 3,
+      "note": "Mẫu quá ít (< 20)"
     },
     "Nhà riêng": {
-      "count": 136,
-      "mean": 5140.78,
-      "median": 2947.16
+      "count": 104,
+      "mean_mae_million": 5115.91,
+      "median_mae_million": 3028.59,
+      "interval_coverage": 0.7115
     }
   },
   "by_location_area": {
     "Huyện Bình Chánh": {
       "count": 1,
-      "mean": 2134.34,
-      "median": 2134.34
+      "note": "Mẫu quá ít (< 20)"
     },
     "Huyện Cần Giờ": {
-      "count": 2,
-      "mean": 4307.96,
-      "median": 4307.96
-    },
-    "Huyện Nhà Bè": {
-      "count": 2,
-      "mean": 800.2,
-      "median": 800.2
+      "count": 1,
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận 1": {
       "count": 2,
-      "mean": 7707.71,
-      "median": 7707.71
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận 10": {
-      "count": 3,
-      "mean": 8488.98,
-      "median": 9416.77
+      "count": 2,
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận 6": {
       "count": 1,
-      "mean": 7267.28,
-      "median": 7267.28
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận 7": {
       "count": 1,
-      "mean": 360.53,
-      "median": 360.53
-    },
-    "Quận 8": {
-      "count": 2,
-      "mean": 1836.89,
-      "median": 1836.89
-    },
-    "Quận Bình Thạnh": {
-      "count": 4,
-      "mean": 4426.9,
-      "median": 3756.05
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận Bình Tân": {
-      "count": 10,
-      "mean": 1758.94,
-      "median": 823.45
+      "count": 8,
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận Gò Vấp": {
       "count": 1,
-      "mean": 937.84,
-      "median": 937.84
+      "note": "Mẫu quá ít (< 20)"
     },
     "Quận Tân Phú": {
-      "count": 7,
-      "mean": 3378.01,
-      "median": 2299.2
+      "count": 4,
+      "note": "Mẫu quá ít (< 20)"
     },
     "TP. Thủ Đức": {
-      "count": 13,
-      "mean": 3263.18,
-      "median": 2460.57
+      "count": 11,
+      "note": "Mẫu quá ít (< 20)"
     },
     "Unknown": {
-      "count": 97,
-      "mean": 5703.96,
-      "median": 3292.11
+      "count": 75,
+      "mean_mae_million": 5536.04,
+      "median_mae_million": 3639.89,
+      "interval_coverage": 0.6667
+    }
+  },
+  "by_price_range": {
+    "< 3 tỷ": {
+      "count": 8,
+      "note": "Mẫu quá ít (< 20)"
+    },
+    "3 - 7 tỷ": {
+      "count": 40,
+      "mean_mae_million": 2689.98,
+      "median_mae_million": 1587.59,
+      "interval_coverage": 0.825
+    },
+    "7 - 15 tỷ": {
+      "count": 38,
+      "mean_mae_million": 3618.81,
+      "median_mae_million": 3220.16,
+      "interval_coverage": 0.8684
+    },
+    "> 15 tỷ": {
+      "count": 21,
+      "mean_mae_million": 12809.06,
+      "median_mae_million": 11648.36,
+      "interval_coverage": 0.381
     }
   }
 }

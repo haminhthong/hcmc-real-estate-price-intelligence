@@ -1,12 +1,19 @@
 {
   "model_version": "1.0.0",
-  "train_rows": 465,
-  "calibration_rows": 116,
-  "test_rows": 146,
-  "mae_million": 4932.333461687149,
-  "rmse_million": 7344.486968197429,
-  "r2": 0.25100422236992315,
-  "mape_percent": 65.5278085678247,
+  "train_rows": 424,
+  "validation_rows": 106,
+  "calibration_rows": 70,
+  "test_rows": 107,
+  "mae_million": 5013.311524752092,
+  "median_ae_million": 2929.8465981826303,
+  "rmse_million": 7490.697884803455,
+  "r2": 0.23190932274239584,
+  "mape_percent": 53.740800557319226,
   "prediction_interval_target_coverage": 0.8,
-  "prediction_interval_test_coverage": 0.7602739726027398
+  "prediction_interval_test_coverage": 0.7102803738317757,
+  "coverage_gap": -0.08971962616822438,
+  "mean_interval_width_million": 13055.871938611126,
+  "relative_interval_width": 1.2121707455628747,
+  "deployment_approved": true,
+  "deployment_reason": "Extra Trees đạt MAE tốt hơn baseline trên tập Validation."
 }

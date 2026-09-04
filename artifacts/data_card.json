@@ -1,19 +1,95 @@
 {
   "source_file": "data_public_sample.csv",
   "rows_raw": 2500,
-  "rows_after_cleaning": 727,
+  "rows_after_cleaning": 707,
+  "duplicate_group_percent": 0.8,
+  "rows_removed_by_reason": {
+    "unsupported_property_type": 1587,
+    "numeric_or_price_outliers": 186,
+    "duplicate_property_group": 20
+  },
+  "missing_rate_by_column": {
+    "Title": 0.0,
+    "Price": 0.0,
+    "Area": 0.0,
+    "Location": 0.0,
+    "Listing ID": 0.0,
+    "Last Updated": 0.0,
+    "Property Type": 0.0,
+    "Width": 52.05,
+    "Length": 63.79,
+    "Bedrooms": 21.36,
+    "Bathrooms": 48.94,
+    "Floors": 61.95,
+    "Position": 52.48,
+    "Direction": 76.24,
+    "Alley Width": 81.9,
+    "Road Type": 84.02,
+    "Description": 2.55,
+    "Latitude": 72.28,
+    "Longitude": 72.28,
+    "Province": 0.0,
+    "Property Type Slug": 0.0,
+    "Scraped At": 0.0,
+    "Last Updated Date": 0.0,
+    "location_area": 0.0,
+    "listing_date": 0.0,
+    "property_group_id": 0.0
+  },
+  "target_percentiles": {
+    "p10": 2400.0,
+    "p25": 3650.0,
+    "p50": 6000.0,
+    "p75": 11500.0,
+    "p90": 22620.0
+  },
+  "area_percentiles": {
+    "p10": 50.0,
+    "p25": 60.0,
+    "p50": 75.0,
+    "p75": 100.0,
+    "p90": 150.0
+  },
+  "rows_per_property_type": {
+    "Căn hộ chung cư": 368,
+    "Nhà riêng": 339
+  },
+  "rows_per_area": {
+    "Unknown": 185,
+    "TP. Thủ Đức": 97,
+    "Quận 7": 88,
+    "Quận Bình Thạnh": 45,
+    "Quận Tân Phú": 43,
+    "Quận Bình Tân": 35,
+    "Huyện Nhà Bè": 24,
+    "Huyện Bình Chánh": 21,
+    "Quận 8": 20,
+    "Quận Gò Vấp": 20,
+    "Quận 4": 20,
+    "Quận Tân Bình": 17,
+    "Quận 1": 16,
+    "Quận 12": 15,
+    "Quận 10": 15,
+    "Quận 6": 13,
+    "Quận 3": 10,
+    "Quận Phú Nhuận": 9,
+    "Quận 5": 4,
+    "Huyện Hóc Môn": 4,
+    "Quận 11": 4,
+    "Huyện Cần Giờ": 2
+  },
   "date_min": "2025-05-03T21:29:00",
   "date_max": "2025-09-30T18:27:00",
   "residential_property_types": [
     "Căn hộ chung cư",
     "Nhà riêng"
   ],
-  "unknown_location_percent": 25.584594222833562,
-  "coordinates_available_percent": 27.097661623108664,
+  "unknown_location_percent": 26.166902404526166,
+  "coordinates_available_percent": 27.722772277227726,
   "target": "Price (triệu VND, giá đăng)",
   "known_limitations": [
     "Dữ liệu là giá đăng tham khảo, không phải giá giao dịch thực tế.",
     "Địa chỉ và tọa độ còn thiếu ở một số bản ghi.",
-    "Dữ liệu mẫu chưa bao phủ đầy đủ toàn bộ phân khúc thị trường TP.HCM."
+    "Tập dữ liệu sau làm sạch nhỏ (707 mẫu), một số phân khúc có số lượng mẫu < 20."
   ]
 }

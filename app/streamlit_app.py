@@ -20,7 +20,7 @@ from src.config import RESIDENTIAL_TYPES, SUPPORTED_AREAS
 from src.predict import load_model, predict_one
 
 # ---------------------------------------------------------------------------
-# Cấu hình Trang Streamlit & Custom CSS
+# Cấu hình trang Streamlit và kiểu hiển thị
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="HCMC Real Estate Price Intelligence",
@@ -29,7 +29,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS cho phong cách hiện đại
+# Kiểu CSS riêng cho giao diện
 st.markdown(
     """
     <style>
@@ -59,14 +59,14 @@ st.markdown(
     unsafe_allow_kwargs={"allow_html": True},
 )
 
-# Header chính
+# Tiêu đề chính
 st.markdown('<div class="main-header">🏠 HCMC Real Estate Price Intelligence</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="sub-header">Hệ thống ước lượng giá đăng bất động sản dân dụng tại TP.HCM dựa trên Machine Learning & Conformal Prediction</div>',
     unsafe_allow_html=True,
 )
 
-# Tạo các Tabs chức năng
+# Tạo các thẻ chức năng
 tab_predict, tab_shap, tab_info = st.tabs([
     "🏠 Dự Báo Giá",
     "📊 Phân Tích SHAP & Thị Trường",
@@ -144,7 +144,7 @@ with tab_predict:
         }
 
         try:
-            result = predict_one(payload)
+            result = predict_one(payload, include_explanation=True)
             st.session_state["last_result"] = result
 
             st.divider()
@@ -159,7 +159,7 @@ with tab_predict:
             res_c1.metric(
                 label="Giá Ước Tính (Dự Báo Điểm)",
                 value=f"{price_billion:,.2f} tỷ VND",
-                help="Giá trị trung tâm được dự báo từ mô hình Random Forest Regressor.",
+                help="Giá trị trung tâm được dự báo từ mô hình Extra Trees.",
             )
 
             res_c2.metric(
@@ -252,8 +252,13 @@ with tab_info:
         with c_info1:
             st.markdown("### 🛠️ Cấu Hướng Mô Hình")
             st.write(f"- **Phiên bản mô hình**: `{model_package.get('version', '1.0.0')}`")
-            st.write(f"- **Thuật toán chính**: `RandomForestRegressor` (180 Trees)")
-            st.write(f"- **Giao thức phân chia dữ liệu**: `{model_package.get('split_protocol', 'Grouped Temporal 64/16/20')}`")
+            st.write(
+                f"- **Thuật toán chính**: `{model_package.get('model_type', 'ExtraTreesRegressor')}`"
+            )
+            st.write(
+                f"- **Giao thức phân chia dữ liệu**: "
+                f"`{model_package.get('split_protocol', 'grouped temporal 60/15/10/15')}`"
+            )
             st.write(f"- **Mục tiêu bao phủ Conformal**: `{model_package.get('target_coverage', 0.8) * 100:.0f}%`")
 
         with c_info2:
@@ -265,6 +270,5 @@ with tab_info:
                 3. **Conformal Uncertainty**: Đảm bảo khoảng bao phủ tin cậy không phụ thuộc vào giả định phân phối chuẩn.
                 """
             )
-    except Exception as exc:
+    except (FileNotFoundError, KeyError, ValueError) as exc:
         st.error(f"Chưa thể tải thông tin mô hình: {exc}")
-

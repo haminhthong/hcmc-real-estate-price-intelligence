@@ -12,7 +12,6 @@ def test_health_schema():
     assert {"status", "model_loaded"}.issubset(set(response.json()))
 
 
-
 def test_model_info_uses_saved_artifact(monkeypatch):
     monkeypatch.setattr(
         api_module,
@@ -21,13 +20,13 @@ def test_model_info_uses_saved_artifact(monkeypatch):
             "version": "1.0.0",
             "supported_areas": ["Quận 1"],
             "supported_property_types": ["Nhà riêng"],
-            "split_protocol": "grouped temporal 64/16/20",
+            "split_protocol": "grouped temporal 60/15/10/15",
             "target_coverage": 0.8,
         },
     )
     response = client.get("/model-info")
     assert response.status_code == 200
-    assert response.json()["split_protocol"] == "grouped temporal 64/16/20"
+    assert response.json()["split_protocol"] == "grouped temporal 60/15/10/15"
 
 
 def test_invalid_area_is_rejected():
@@ -67,7 +66,7 @@ def test_prediction_response_schema(monkeypatch):
         "segment_median_unit_price_million_m2": 98.0,
         "disclaimer": "Giá tham khảo.",
     }
-    monkeypatch.setattr(api_module, "predict_one", lambda _: expected)
+    monkeypatch.setattr(api_module, "predict_one", lambda _val, **_kwargs: expected)
     payload = {
         "Property Type": "Nhà riêng",
         "location_area": "Quận 1",
@@ -77,3 +76,28 @@ def test_prediction_response_schema(monkeypatch):
     response = client.post("/predict", json=payload)
     assert response.status_code == 200
     assert response.json() == expected
+
+
+def test_explain_endpoint_returns_shap_contributions(monkeypatch):
+    expected = {
+        "predicted_price_million": 7850.0,
+        "lower_bound_million": 6400.0,
+        "upper_bound_million": 9300.0,
+        "confidence": "high",
+        "model_version": "1.0.0",
+        "warnings": [],
+        "data_quality_score": 90.0,
+        "top_contributions": [{"feature": "Area", "shap_value": 0.25}],
+        "segment_median_unit_price_million_m2": 98.0,
+        "disclaimer": "Giá tham khảo.",
+    }
+    monkeypatch.setattr(api_module, "predict_one", lambda _val, include_explanation=False: expected)
+    payload = {
+        "Property Type": "Nhà riêng",
+        "location_area": "Quận 1",
+        "Area": 50,
+        "Bedrooms": 2,
+    }
+    response = client.post("/explain", json=payload)
+    assert response.status_code == 200
+    assert response.json()["top_contributions"] == [{"feature": "Area", "shap_value": 0.25}]

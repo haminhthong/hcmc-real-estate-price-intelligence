@@ -1,7 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from src.data_processing import clean_data
+from src.data_processing import (
+    _make_property_group_id,
+    clean_data,
+    make_property_signature,
+)
 from src.feature_engineering import make_features
 from src.train import build_pipeline
 
@@ -22,6 +26,8 @@ def sample_df():
             "Alley Width": [2.0, 3.0],
             "Direction": ["Đông", "Tây"],
             "Position": ["Trong hẻm", "Đường chính"],
+            "Latitude": [10.7769, 10.7770],
+            "Longitude": [106.7009, 106.7010],
         }
     )
 
@@ -59,6 +65,56 @@ def test_duplicate_rows_without_listing_id_share_one_group():
     frame = sample_df().drop(columns="Listing ID")
     duplicated = pd.concat([frame.iloc[[0]], frame.iloc[[0]]], ignore_index=True)
     assert len(clean_data(duplicated)) == 1
+
+
+def test_different_listing_id_same_property_shares_group():
+    row1 = sample_df().iloc[[0]].copy()
+    row2 = sample_df().iloc[[0]].copy()
+    row1["Listing ID"] = 99991
+    row2["Listing ID"] = 99992
+    concat_df = pd.concat([row1, row2], ignore_index=True)
+    signatures = make_property_signature(concat_df)
+    assert signatures.iloc[0] == signatures.iloc[1]
+
+
+def test_reposted_property_with_changed_price_stays_in_one_group():
+    frame = sample_df().iloc[[0]].copy()
+    repost = frame.copy()
+    repost["Price"] = 5200.0
+    repost["Listing ID"] = 88888
+    concat_df = pd.concat([frame, repost], ignore_index=True)
+    signatures = make_property_signature(concat_df)
+    assert signatures.iloc[0] == signatures.iloc[1]
+
+
+def test_small_coordinate_shift_shares_group():
+    frame = sample_df().iloc[[0]].copy()
+    shift = frame.copy()
+    shift["Latitude"] = float(frame["Latitude"].iloc[0]) + 0.00001
+    shift["Longitude"] = float(frame["Longitude"].iloc[0]) + 0.00001
+    shift["Listing ID"] = 77777
+    concat_df = pd.concat([frame, shift], ignore_index=True)
+    signatures = make_property_signature(concat_df)
+    assert signatures.iloc[0] == signatures.iloc[1]
+
+
+def test_different_houses_same_district_not_merged():
+    house1 = sample_df().iloc[[0]].copy()
+    house2 = sample_df().iloc[[0]].copy()
+    house2["Area"] = 120.0
+    house2["Width"] = 8.0
+    concat_df = pd.concat([house1, house2], ignore_index=True)
+    signatures = make_property_signature(concat_df)
+    assert signatures.iloc[0] != signatures.iloc[1]
+
+
+def test_property_group_size_max_greater_than_one():
+    frame = sample_df().iloc[[0]].copy()
+    repost = frame.copy()
+    repost["Listing ID"] = 12345
+    concat_df = pd.concat([frame, repost], ignore_index=True)
+    concat_df["property_group_id"] = _make_property_group_id(concat_df)
+    assert concat_df.groupby("property_group_id").size().max() > 1
 
 
 def test_spatial_and_quality_features_are_created():

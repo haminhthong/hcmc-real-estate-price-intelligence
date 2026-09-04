@@ -3,19 +3,25 @@
 Ứng dụng cung cấp các HTTP Endpoints:
 - GET /health: Kiểm tra trạng thái hoạt động của máy chủ và mô hình.
 - GET /model-info: Tra cứu thông tin cấu hình, phiên bản và vùng hỗ trợ.
-- POST /predict: Tiếp nhận thông tin bất động sản và trả về dự báo giá, khoảng tin cậy conformal, và phân tích SHAP.
+- POST /predict: Tiếp nhận thông tin bất động sản và trả về dự báo giá, khoảng tin cậy conformal (SHAP tắt mặc định).
+- POST /explain: Tiếp nhận thông tin bất động sản và trả về dự báo giá kèm giải thích SHAP.
 """
 
-from typing import Any, Dict, List, Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.config import MODEL_PATH, MODEL_VERSION, RESIDENTIAL_TYPES, SUPPORTED_AREAS, logger
+from src.config import (
+    MODEL_PATH,
+    MODEL_VERSION,
+    RESIDENTIAL_TYPES,
+    SUPPORTED_AREAS,
+    logger,
+)
 from src.predict import load_model, predict_one
 
-# Khởi tạo ứng dụng FastAPI với mô tả chuẩn Swagger OpenAPI
+# Khởi tạo ứng dụng FastAPI và tài liệu OpenAPI.
 app = FastAPI(
     title="HCMC Real Estate Price Intelligence API",
     description=(
@@ -26,16 +32,6 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
-
-# Thêm middleware CORS cho phép kết nối từ web front-end
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 class PredictionRequest(BaseModel):
     """Dữ liệu yêu cầu đầu vào cho một bất động sản cần định giá."""
@@ -142,6 +138,10 @@ class PredictionRequest(BaseModel):
     near_market: bool = Field(default=False, description="Cờ tiện ích: Gần chợ / siêu thị")
     near_school: bool = Field(default=False, description="Cờ tiện ích: Gần trường học / đại học")
     is_urgent_sale: bool = Field(default=False, description="Cờ tiện ích: Chính chủ cần bán gấp")
+    include_explanation: bool = Field(
+        default=False,
+        description="Cờ yêu cầu giải thích 5 đặc trưng SHAP quan trọng nhất (Mặc định False để tiết kiệm tài nguyên CPU)",
+    )
 
     @field_validator("property_type")
     @classmethod
@@ -166,11 +166,14 @@ class PredictionResponse(BaseModel):
     predicted_price_million: float = Field(..., description="Giá dự báo điểm trung tâm (triệu VND)")
     lower_bound_million: float = Field(..., description="Cận dưới khoảng tin cậy conformal (triệu VND)")
     upper_bound_million: float = Field(..., description="Cận trên khoảng tin cậy conformal (triệu VND)")
-    confidence: Literal["low", "medium", "high"] = Field(..., description="Mức độ tin cậy của dự báo (low/medium/high)")
+    confidence: Literal["low", "medium", "high"] = Field(
+        ...,
+        description="Chỉ báo heuristic dựa trên độ rộng khoảng dự báo và chất lượng dữ liệu",
+    )
     model_version: str = Field(..., description="Phiên bản mô hình đang phục vụ")
-    warnings: List[str] = Field(..., description="Danh sách các cảnh báo về dữ liệu hoặc phạm vi huấn luyện")
+    warnings: list[str] = Field(..., description="Danh sách các cảnh báo về dữ liệu hoặc phạm vi huấn luyện")
     data_quality_score: float = Field(..., ge=0, le=100, description="Điểm chất lượng dữ liệu đầu vào (0-100%)")
-    top_contributions: List[Dict[str, Any]] = Field(..., description="Top 5 đặc trưng ảnh hưởng nhiều nhất (SHAP values)")
+    top_contributions: list[dict[str, Any]] = Field(..., description="Top 5 đặc trưng ảnh hưởng nhiều nhất (SHAP values)")
     segment_median_unit_price_million_m2: float | None = Field(
         None, description="Trung vị đơn giá cùng phân khúc loại hình x quận/huyện (triệu VND/m²)"
     )
@@ -178,7 +181,7 @@ class PredictionResponse(BaseModel):
 
 
 @app.get("/health", summary="Kiểm tra sức khỏe dịch vụ API", tags=["System"])
-def health() -> Dict[str, Any]:
+def health() -> dict[str, Any]:
     """Trả về trạng thái hoạt động của server và sự tồn tại của file mô hình."""
     model_loaded = MODEL_PATH.exists()
     return {
@@ -189,19 +192,19 @@ def health() -> Dict[str, Any]:
 
 
 @app.get("/model-info", summary="Xem thông tin chi tiết của mô hình", tags=["Model"])
-def model_info() -> Dict[str, Any]:
+def model_info() -> dict[str, Any]:
     """Trả về phiên bản mô hình, thuật toán, danh mục quận/huyện và phương pháp chia tập."""
     try:
         artifact = load_model()
         return {
             "model_version": artifact["version"],
-            "model_type": "RandomForestRegressor",
+            "model_type": artifact.get("model_type", "ExtraTreesRegressor"),
             "supported_areas": artifact.get("supported_areas", SUPPORTED_AREAS),
             "supported_property_types": artifact.get(
                 "supported_property_types",
                 RESIDENTIAL_TYPES,
             ),
-            "split_protocol": artifact.get("split_protocol", "grouped temporal 64/16/20"),
+            "split_protocol": artifact.get("split_protocol", "grouped temporal 60/15/10/15"),
             "prediction_interval_target_coverage": artifact.get("target_coverage", 0.8),
         }
     except (FileNotFoundError, ValueError) as exc:
@@ -210,12 +213,23 @@ def model_info() -> Dict[str, Any]:
 
 
 @app.post("/predict", response_model=PredictionResponse, summary="Dự báo giá bất động sản", tags=["Prediction"])
-def predict(request: PredictionRequest) -> Dict[str, Any]:
-    """Tiếp nhận thông tin chi tiết bất động sản và trả về giá dự báo cùng các phân tích bổ trợ."""
+def predict(request: PredictionRequest) -> dict[str, Any]:
+    """Tiếp nhận thông tin chi tiết bất động sản và trả về giá dự báo cùng khoảng tin cậy."""
     try:
         payload = request.model_dump(by_alias=True)
-        return predict_one(payload)
+        include_explanation = payload.pop("include_explanation", False)
+        return predict_one(payload, include_explanation=include_explanation)
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         logger.error("Lỗi khi xử lý dự báo giá: %s", exc)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+
+@app.post("/explain", response_model=PredictionResponse, summary="Dự báo giá kèm giải thích SHAP", tags=["Prediction"])
+def explain(request: PredictionRequest) -> dict[str, Any]:
+    """Tiếp nhận thông tin bất động sản và trả về giá dự báo kèm top 5 đặc trưng SHAP (yêu cầu xử lý CPU cao hơn)."""
+    try:
+        payload = request.model_dump(by_alias=True)
+        return predict_one(payload, include_explanation=True)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        logger.error("Lỗi khi xử lý dự báo giá và SHAP: %s", exc)
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

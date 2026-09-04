@@ -1,26 +1,31 @@
 """Mô-đun huấn luyện, hiệu chỉnh khoảng tin cậy và lưu trữ mô hình định giá.
 
 Tệp này đảm nhiệm quy trình MLOps huấn luyện end-to-end:
-1. Xây dựng scikit-learn Pipeline (SimpleImputer + OneHotEncoder + RandomForestRegressor).
-2. Phân chia tập dữ liệu theo nhóm thời gian (Grouped Temporal Split 64/16/20) chống rò rỉ dữ liệu (Data Leakage).
+1. Xây dựng pipeline scikit-learn gồm xử lý thiếu, mã hóa danh mục và ExtraTreesRegressor.
+2. Chia nhóm theo thời gian thành Train/Validation/Calibration/Test theo tỷ lệ 60/15/10/15.
 3. Sử dụng Conformal Prediction xác định khoảng tin cậy không phụ thuộc phân phối (Target Coverage 80%).
-4. So sánh mô hình Random Forest với Median Baseline trên tập Calibration.
+4. So sánh Extra Trees với baseline trung vị trên Validation; chỉ dùng Calibration để hiệu chỉnh khoảng dự báo.
 5. Ghi nhận thông số đánh giá (MAE, RMSE, R2, MAPE) và xuất các artifacts (metrics, model comparison, error analysis, data card).
 """
 
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Set, Tuple
+from typing import Any
 
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyRegressor
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    median_absolute_error,
+    r2_score,
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
@@ -43,12 +48,12 @@ from .feature_engineering import make_features
 
 
 def build_pipeline() -> Pipeline:
-    """Xây dựng Pipeline xử lý đặc trưng và mô hình Random Forest cho định giá bất động sản.
+    """Xây dựng pipeline xử lý đặc trưng và mô hình Extra Trees.
 
     Pipeline bao gồm:
     - Xử lý đặc trưng số: Xử lý giá trị khuyết bằng trung vị (median imputer) + Indicator.
     - Xử lý đặc trưng danh mục: Điền yếu vị (most frequent imputer) + OneHotEncoder.
-    - Regressor: RandomForestRegressor (180 trees, min_samples_leaf=2).
+    - Mô hình: ExtraTreesRegressor với 300 cây và min_samples_leaf=1.
 
     Returns:
         Pipeline chưa được fit.
@@ -86,9 +91,9 @@ def build_pipeline() -> Pipeline:
             ),
         ]
     )
-    regressor = RandomForestRegressor(
-        n_estimators=180,
-        min_samples_leaf=2,
+    regressor = ExtraTreesRegressor(
+        n_estimators=300,
+        min_samples_leaf=1,
         n_jobs=1,
         random_state=RANDOM_STATE,
     )
@@ -99,23 +104,24 @@ def build_pipeline() -> Pipeline:
 
 def split_group_indices(
     df: pd.DataFrame,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Chia tập dữ liệu theo nhóm bất động sản và mốc thời gian (Grouped Temporal Split).
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Chia tập dữ liệu theo nhóm bất động sản và mốc thời gian (Grouped Temporal Split 60/15/10/15).
 
-    NGUYÊN LÝ CHỐNG LEAKAGE:
+    NGUYÊN LÝ CHỐNG LEAKAGE & PHÂN TÁCH ĐỘC LẬP:
     1. Nhóm toàn bộ tin đăng theo `property_group_id`.
     2. Lấy ngày đăng bài muộn nhất của từng nhóm và sắp xếp tăng dần theo thời gian.
     3. Phân chia danh sách nhóm theo tỷ lệ:
-       - Train: 64% nhóm đầu tiên (dữ liệu cũ nhất trong quá khứ).
-       - Calibration: 16% nhóm tiếp theo (dùng hiệu chỉnh khoảng tin cậy conformal).
-       - Test: 20% nhóm muộn nhất (dùng để kiểm thử giả lập dữ liệu thực tế tương lai).
-    4. Kiểm tra đảm bảo tập Train, Calibration và Test hoàn toàn giao rỗng (Disjoint sets).
+       - Train: 60% nhóm đầu tiên (Fit preprocessing & model).
+       - Validation: 15% nhóm tiếp theo (Chọn mô hình, hyperparameter và so sánh baseline).
+       - Calibration: 10% nhóm tiếp theo (Chỉ tính conformal residuals quantile).
+       - Test: 15% nhóm muộn nhất (Đánh giá kiểm thử độc lập duy nhất 1 lần).
+    4. Kiểm tra đảm bảo cả 4 tập hoàn toàn giao rỗng (Disjoint sets).
 
     Args:
         df: DataFrame dữ liệu đã được làm sạch và bổ sung `property_group_id`.
 
     Returns:
-        Tuple chứa các mảng chỉ số (indices): (train_idx, calibration_idx, test_idx).
+        Tuple chứa các mảng chỉ số: (train_idx, validation_idx, calibration_idx, test_idx).
 
     Raises:
         RuntimeError: Nếu phát hiện bất kỳ nhóm bất động sản nào bị trùng giữa các tập.
@@ -126,38 +132,48 @@ def split_group_indices(
         .sort_values(["listing_date", "property_group_id"])
     )
     number_of_groups = len(ordered_groups)
-    test_start = int(number_of_groups * 0.8)
-    calibration_start = int(number_of_groups * 0.64)
+    train_end = int(number_of_groups * 0.60)
+    validation_end = int(number_of_groups * 0.75)
+    calibration_end = int(number_of_groups * 0.85)
 
-    train_groups: Set[str] = set(
-        ordered_groups.iloc[:calibration_start]["property_group_id"]
+    train_groups: set[str] = set(
+        ordered_groups.iloc[:train_end]["property_group_id"]
     )
-    calibration_groups: Set[str] = set(
-        ordered_groups.iloc[calibration_start:test_start]["property_group_id"]
+    validation_groups: set[str] = set(
+        ordered_groups.iloc[train_end:validation_end]["property_group_id"]
     )
-    test_groups: Set[str] = set(
-        ordered_groups.iloc[test_start:]["property_group_id"]
+    calibration_groups: set[str] = set(
+        ordered_groups.iloc[validation_end:calibration_end]["property_group_id"]
+    )
+    test_groups: set[str] = set(
+        ordered_groups.iloc[calibration_end:]["property_group_id"]
     )
 
     train_idx = df.index[df["property_group_id"].isin(train_groups)].to_numpy()
+    validation_idx = df.index[
+        df["property_group_id"].isin(validation_groups)
+    ].to_numpy()
     calibration_idx = df.index[
         df["property_group_id"].isin(calibration_groups)
     ].to_numpy()
     test_idx = df.index[df["property_group_id"].isin(test_groups)].to_numpy()
 
-    # Kiểm tra tính toàn vẹn (Disjointness test)
+    # Kiểm tra tính toàn vẹn (Disjointness test giữa 4 tập)
     group_sets = [
         set(df.iloc[index]["property_group_id"])
-        for index in (train_idx, calibration_idx, test_idx)
+        for index in (train_idx, validation_idx, calibration_idx, test_idx)
     ]
     if (
         group_sets[0] & group_sets[1]
         or group_sets[0] & group_sets[2]
+        or group_sets[0] & group_sets[3]
         or group_sets[1] & group_sets[2]
+        or group_sets[1] & group_sets[3]
+        or group_sets[2] & group_sets[3]
     ):
         raise RuntimeError("CẢNH BÁO LEAKAGE: Phát hiện nhóm bất động sản bị trùng giữa các tập!")
 
-    return train_idx, calibration_idx, test_idx
+    return train_idx, validation_idx, calibration_idx, test_idx
 
 
 def conformal_quantile(residuals: np.ndarray, coverage: float = 0.8) -> float:
@@ -181,7 +197,7 @@ def conformal_quantile(residuals: np.ndarray, coverage: float = 0.8) -> float:
     return float(np.sort(residuals)[rank - 1])
 
 
-def regression_metrics(actual: np.ndarray, prediction: np.ndarray) -> Dict[str, float]:
+def regression_metrics(actual: np.ndarray, prediction: np.ndarray) -> dict[str, float]:
     """Tính các chỉ số đo lường hiệu năng mô hình hồi quy (đơn vị: triệu VND).
 
     Args:
@@ -189,18 +205,19 @@ def regression_metrics(actual: np.ndarray, prediction: np.ndarray) -> Dict[str, 
         prediction: Mảng giá trị dự báo từ mô hình (triệu VND).
 
     Returns:
-        Dict chứa các chỉ số: mae_million, rmse_million, r2, mape_percent.
+        Dict chứa các chỉ số: mae_million, median_ae_million, rmse_million, r2, mape_percent.
     """
     percentage_error = np.abs(prediction - actual) / np.maximum(actual, 1)
     return {
         "mae_million": float(mean_absolute_error(actual, prediction)),
+        "median_ae_million": float(median_absolute_error(actual, prediction)),
         "rmse_million": float(mean_squared_error(actual, prediction) ** 0.5),
         "r2": float(r2_score(actual, prediction)),
         "mape_percent": float(percentage_error.mean() * 100),
     }
 
 
-def save_model_atomically(artifact: Dict[str, Any], destination: Path) -> None:
+def save_model_atomically(artifact: dict[str, Any], destination: Path) -> None:
     """Ghi file mô hình nguyên tử (Atomic Write) qua tệp tạm `.tmp`.
 
     Đảm bảo nếu quá trình ghi file bị gián đoạn, file mô hình gốc phục vụ API
@@ -216,7 +233,15 @@ def save_model_atomically(artifact: Dict[str, Any], destination: Path) -> None:
     logger.info("Đã lưu file mô hình nguyên tử thành công tại: %s", destination)
 
 
-def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
+def _write_json(data: dict[str, Any], destination: Path) -> None:
+    """Ghi dữ liệu JSON theo cùng một định dạng UTF-8."""
+    destination.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def train(data_path: Path = DATA_PATH) -> dict[str, Any]:
     """Huấn luyện mô hình, hiệu chỉnh khoảng tin cậy conformal và lưu toàn bộ kết quả.
 
     Args:
@@ -228,29 +253,62 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
     logger.info("Bắt đầu quy trình huấn luyện từ file: %s", data_path)
     raw_data = pd.read_csv(data_path)
     df = clean_data(raw_data)
-    if len(df) < 50:
-        raise ValueError("Số lượng mẫu hợp lệ quá nhỏ (< 50 mẫu) để tiến hành phân chia 3 tập.")
+    audit_stats = getattr(df, "attrs", {}).get("data_audit", {})
 
-    # 1. Phân chia Grouped Temporal Split
-    train_idx, calibration_idx, test_idx = split_group_indices(df)
+    if len(df) < 50:
+        raise ValueError("Số lượng mẫu hợp lệ quá nhỏ (< 50 mẫu) để tiến hành phân chia 4 tập.")
+
+    # Chia dữ liệu theo nhóm và thời gian trước khi tạo mô hình.
+    train_idx, validation_idx, calibration_idx, test_idx = split_group_indices(df)
     logger.info(
-        "Đã chia tập dữ liệu: Train=%d mẫu, Calibration=%d mẫu, Test=%d mẫu.",
+        "Đã chia tập dữ liệu: Train=%d mẫu, Validation=%d mẫu, Calibration=%d mẫu, Test=%d mẫu.",
         len(train_idx),
+        len(validation_idx),
         len(calibration_idx),
         len(test_idx),
     )
 
-    # 2. Chuẩn bị đặc trưng và log-transform biến mục tiêu Price
+    # Tạo đặc trưng và biến đổi log cho giá mục tiêu.
     features = make_features(df)
     log_target = np.log1p(df["Price"])
 
-    # 3. Fit Pipeline trên tập Train
+    # Chỉ khớp pipeline trên tập huấn luyện.
     pipeline = build_pipeline().fit(
         features.iloc[train_idx],
         log_target.iloc[train_idx],
     )
 
-    # 4. Hiệu chỉnh Conformal Prediction trên tập Calibration
+    # Chọn mô hình bằng tập validation, không sử dụng calibration hoặc test.
+    validation_log_prediction = pipeline.predict(features.iloc[validation_idx])
+    validation_prediction = np.maximum(np.expm1(validation_log_prediction), 0)
+    validation_actual = df.iloc[validation_idx]["Price"].to_numpy()
+    extra_trees_val_metrics = regression_metrics(validation_actual, validation_prediction)
+
+    baseline = DummyRegressor(strategy="median").fit(
+        features.iloc[train_idx],
+        log_target.iloc[train_idx],
+    )
+    baseline_val_prediction = np.maximum(
+        np.expm1(baseline.predict(features.iloc[validation_idx])),
+        0,
+    )
+    baseline_val_metrics = regression_metrics(validation_actual, baseline_val_prediction)
+
+    # Chặn triển khai nếu Extra Trees không vượt baseline theo MAE.
+    deployment_approved = bool(
+        extra_trees_val_metrics["mae_million"] < baseline_val_metrics["mae_million"]
+    )
+    deployment_reason = (
+        "Extra Trees đạt MAE tốt hơn baseline trên tập Validation."
+        if deployment_approved
+        else "Extra Trees không cải thiện MAE so với baseline trên tập Validation."
+    )
+    if not deployment_approved:
+        raise RuntimeError(deployment_reason)
+
+    recommended_model = "extra_trees" if deployment_approved else "baseline_median"
+
+    # Chỉ dùng calibration để tính phần dư conformal.
     calibration_prediction = pipeline.predict(features.iloc[calibration_idx])
     calibration_residual = np.abs(
         log_target.iloc[calibration_idx].to_numpy() - calibration_prediction
@@ -261,12 +319,12 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
         coverage=target_coverage,
     )
 
-    # 5. Đánh giá kiểm thử độc lập trên tập Test
+    # Chỉ dùng test để báo cáo kết quả cuối cùng.
     test_log_prediction = pipeline.predict(features.iloc[test_idx])
     prediction = np.maximum(np.expm1(test_log_prediction), 0)
     actual = df.iloc[test_idx]["Price"].to_numpy()
 
-    # Tính khoảng dự báo conformal trên tập Test
+    # Tính khoảng dự báo conformal trên tập test.
     lower_bound = np.maximum(
         np.expm1(test_log_prediction - residual_log_quantile),
         0,
@@ -275,57 +333,33 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
     interval_coverage = float(
         np.mean((actual >= lower_bound) & (actual <= upper_bound))
     )
+    mean_interval_width = float(np.mean(upper_bound - lower_bound))
+    coverage_gap = float(interval_coverage - target_coverage)
+    relative_interval_width = float(mean_interval_width / max(float(np.mean(actual)), 1.0))
 
-    # 6. So sánh với mô hình Baseline (Median Regressor)
-    baseline = DummyRegressor(strategy="median").fit(
-        features.iloc[train_idx],
-        log_target.iloc[train_idx],
-    )
-    baseline_prediction = np.maximum(
+    baseline_test_prediction = np.maximum(
         np.expm1(baseline.predict(features.iloc[test_idx])),
         0,
     )
-    baseline_calibration_prediction = np.maximum(
-        np.expm1(baseline.predict(features.iloc[calibration_idx])),
-        0,
-    )
-    calibration_actual = df.iloc[calibration_idx]["Price"].to_numpy()
-    random_forest_calibration_prediction = np.maximum(
-        np.expm1(calibration_prediction),
-        0,
-    )
-
-    baseline_calibration_metrics = regression_metrics(
-        calibration_actual,
-        baseline_calibration_prediction,
-    )
-    random_forest_calibration_metrics = regression_metrics(
-        calibration_actual,
-        random_forest_calibration_prediction,
-    )
-
-    champion = (
-        "random_forest"
-        if random_forest_calibration_metrics["mae_million"]
-        < baseline_calibration_metrics["mae_million"]
-        else "baseline_median"
-    )
 
     comparison = {
-        "selection_split": "calibration",
+        "selection_split": "validation",
         "selection_metric": "mae_million",
-        "champion": champion,
-        "calibration": {
-            "baseline_median": baseline_calibration_metrics,
-            "random_forest": random_forest_calibration_metrics,
+        "recommended_model": recommended_model,
+        "deployed_model": "extra_trees",
+        "deployment_approved": deployment_approved,
+        "deployment_reason": deployment_reason,
+        "validation": {
+            "baseline_median": baseline_val_metrics,
+            "extra_trees": extra_trees_val_metrics,
         },
         "test_report_only": {
-            "baseline_median": regression_metrics(actual, baseline_prediction),
-            "random_forest": regression_metrics(actual, prediction),
+            "baseline_median": regression_metrics(actual, baseline_test_prediction),
+            "extra_trees": regression_metrics(actual, prediction),
         },
     }
 
-    # 7. Tính đơn giá trung vị phân khúc theo từng Loại hình x Quận/huyện
+    # Tính trung vị đơn giá từ tập huấn luyện cho từng phân khúc.
     training_data = df.iloc[train_idx]
     training_features = features.iloc[train_idx]
     segment_unit_prices = (
@@ -335,9 +369,10 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
         .to_dict()
     )
 
-    # Đóng gói Model Artifact
+    # Đóng gói pipeline và metadata phục vụ suy luận.
     artifact = {
         "pipeline": pipeline,
+        "model_type": "ExtraTreesRegressor",
         "version": MODEL_VERSION,
         "features": features.columns.tolist(),
         "supported_areas": sorted(training_data["location_area"].unique().tolist()),
@@ -354,38 +389,85 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
         },
         "residual_log_quantile": residual_log_quantile,
         "target_coverage": target_coverage,
-        "split_protocol": "grouped temporal 64/16/20",
+        "split_protocol": "grouped temporal 60/15/10/15",
         "segment_unit_prices": segment_unit_prices,
     }
 
-    # Đóng gói Metrics
+    # Tổng hợp metric trên tập test.
     metrics = {
         "model_version": MODEL_VERSION,
-        "train_rows": int(len(train_idx)),
-        "calibration_rows": int(len(calibration_idx)),
-        "test_rows": int(len(test_idx)),
+        "train_rows": len(train_idx),
+        "validation_rows": len(validation_idx),
+        "calibration_rows": len(calibration_idx),
+        "test_rows": len(test_idx),
         **regression_metrics(actual, prediction),
         "prediction_interval_target_coverage": target_coverage,
         "prediction_interval_test_coverage": interval_coverage,
+        "coverage_gap": coverage_gap,
+        "mean_interval_width_million": mean_interval_width,
+        "relative_interval_width": relative_interval_width,
+        "deployment_approved": deployment_approved,
+        "deployment_reason": deployment_reason,
     }
 
-    # Phân tích sai số theo nhóm
-    test_result = df.iloc[test_idx][["Property Type", "location_area"]].copy()
+    # Phân tích sai số và độ bao phủ theo phân khúc.
+    test_result = df.iloc[test_idx][["Property Type", "location_area", "Price"]].copy()
     test_result["absolute_error_million"] = np.abs(prediction - actual)
+    test_result["in_interval"] = (actual >= lower_bound) & (actual <= upper_bound)
+
+    # Chia nhóm theo khoảng giá để đọc sai số dễ hơn.
+    price_bins = [0, 3000, 7000, 15000, np.inf]
+    price_labels = ["< 3 tỷ", "3 - 7 tỷ", "7 - 15 tỷ", "> 15 tỷ"]
+    test_result["price_range"] = pd.cut(test_result["Price"], bins=price_bins, labels=price_labels)
+
+    min_segment_size = 20
+
+    def summarize_segment(df_group: pd.DataFrame) -> dict[str, Any]:
+        count = len(df_group)
+        if count < min_segment_size:
+            return {"count": count, "note": f"Mẫu quá ít (< {min_segment_size})"}
+        return {
+            "count": count,
+            "mean_mae_million": round(float(df_group["absolute_error_million"].mean()), 2),
+            "median_mae_million": round(float(df_group["absolute_error_million"].median()), 2),
+            "interval_coverage": round(float(df_group["in_interval"].mean()), 4),
+        }
+
     error_analysis = {
-        "by_property_type": test_result.groupby("Property Type")[
-            "absolute_error_million"
-        ].agg(["count", "mean", "median"]).round(2).to_dict("index"),
-        "by_location_area": test_result.groupby("location_area")[
-            "absolute_error_million"
-        ].agg(["count", "mean", "median"]).round(2).to_dict("index"),
+        "by_property_type": {
+            str(name): summarize_segment(group)
+            for name, group in test_result.groupby("Property Type", observed=False)
+        },
+        "by_location_area": {
+            str(name): summarize_segment(group)
+            for name, group in test_result.groupby("location_area", observed=False)
+        },
+        "by_price_range": {
+            str(name): summarize_segment(group)
+            for name, group in test_result.groupby("price_range", observed=False)
+        },
     }
 
-    # Thẻ thông tin dữ liệu (Data Card)
+    # Tạo thẻ mô tả chất lượng và phạm vi dữ liệu.
     data_card = {
         "source_file": Path(data_path).name,
-        "rows_raw": int(len(raw_data)),
-        "rows_after_cleaning": int(len(df)),
+        "rows_raw": audit_stats.get("rows_raw", len(raw_data)),
+        "rows_after_cleaning": audit_stats.get("rows_after_cleaning", len(df)),
+        "duplicate_group_percent": audit_stats.get("duplicate_group_percent", 0.0),
+        "rows_removed_by_reason": audit_stats.get("rows_removed_by_reason", {}),
+        "missing_rate_by_column": {
+            col: round(float(df[col].isna().mean() * 100), 2) for col in df.columns
+        },
+        "target_percentiles": {
+            f"p{p}": round(float(df["Price"].quantile(p / 100)), 1)
+            for p in [10, 25, 50, 75, 90]
+        },
+        "area_percentiles": {
+            f"p{p}": round(float(df["Area"].quantile(p / 100)), 1)
+            for p in [10, 25, 50, 75, 90]
+        },
+        "rows_per_property_type": df["Property Type"].value_counts().to_dict(),
+        "rows_per_area": df["location_area"].value_counts().to_dict(),
         "date_min": df["listing_date"].min().isoformat(),
         "date_max": df["listing_date"].max().isoformat(),
         "residential_property_types": sorted(df["Property Type"].unique().tolist()),
@@ -399,31 +481,22 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
         "known_limitations": [
             "Dữ liệu là giá đăng tham khảo, không phải giá giao dịch thực tế.",
             "Địa chỉ và tọa độ còn thiếu ở một số bản ghi.",
-            "Dữ liệu mẫu chưa bao phủ đầy đủ toàn bộ phân khúc thị trường TP.HCM.",
+            f"Tập dữ liệu sau làm sạch nhỏ ({len(df)} mẫu), một số phân khúc có số lượng mẫu < 20.",
         ],
     }
 
-    # 8. Lưu trữ các Artifacts
+    # Lưu mô hình và các báo cáo bằng định dạng thống nhất.
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
     save_model_atomically(artifact, MODEL_PATH)
 
-    METRICS_PATH.write_text(
-        json.dumps(metrics, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    MODEL_COMPARISON_PATH.write_text(
-        json.dumps(comparison, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    ERROR_ANALYSIS_PATH.write_text(
-        json.dumps(error_analysis, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    DATA_CARD_PATH.write_text(
-        json.dumps(data_card, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    for destination, report in (
+        (METRICS_PATH, metrics),
+        (MODEL_COMPARISON_PATH, comparison),
+        (ERROR_ANALYSIS_PATH, error_analysis),
+        (DATA_CARD_PATH, data_card),
+    ):
+        _write_json(report, destination)
 
     logger.info("Hoàn tất huấn luyện! Kết quả metrics: %s", json.dumps(metrics, ensure_ascii=False))
     return metrics
@@ -431,4 +504,3 @@ def train(data_path: Path = DATA_PATH) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     train()
-

@@ -5,6 +5,7 @@ và hiển thị toàn bộ các chỉ số MAE, RMSE, R2, MAPE, Coverage trên 
 """
 
 import json
+
 from .config import METRICS_PATH, MODEL_PATH, logger
 
 
@@ -21,4 +22,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

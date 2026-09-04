@@ -5,15 +5,13 @@ Tệp này tính toán các thuộc tính khoảng cách địa lý (Haversine d
 và trích xuất các cờ tiện ích (binary flags) từ văn bản mô tả.
 """
 
-from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 
 from .config import FLAG_FEATURES, MODEL_FEATURES
 
-# Từ khóa tìm kiếm cho các cờ nhị phân (Binary Flags)
-KEYWORDS: Dict[str, List[str]] = {
+# Từ khóa dùng để tạo các cờ nhị phân
+KEYWORDS: dict[str, list[str]] = {
     "has_furniture": ["nội thất", "full nội thất"],
     "car_alley": ["hẻm xe hơi", "ô tô vào", "oto vào", "hxh"],
     "near_market": ["gần chợ", "sát chợ"],
@@ -78,7 +76,7 @@ def add_quality_features(df: pd.DataFrame) -> pd.DataFrame:
         out["listing_age_days"] = np.nan
 
     # Các thuộc tính xem xét điểm chất lượng
-    quality_columns: List[str] = [
+    quality_columns: list[str] = [
         "Bedrooms", "Bathrooms", "Floors", "Width", "Length",
         "Alley Width", "Direction", "Position", "Latitude", "Longitude",
     ]
@@ -169,4 +167,3 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Thay thế các giá trị vô cực nếu có
     return out[MODEL_FEATURES].replace([np.inf, -np.inf], np.nan)
-
