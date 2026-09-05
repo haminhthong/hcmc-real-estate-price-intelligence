@@ -124,3 +124,16 @@ def test_spatial_and_quality_features_are_created():
     features = make_features(frame)
     assert features.loc[0, "distance_to_cbd_km"] < 0.1
     assert 0 < features.loc[0, "data_quality_score"] < 100
+
+
+def test_reference_date_prevents_serving_skew_and_leakage():
+    frame = pd.DataFrame(
+        [
+            {"listing_date": pd.Timestamp("2025-01-01")},
+            {"listing_date": pd.Timestamp("2025-01-10")},
+        ]
+    )
+    ref_date = pd.Timestamp("2025-01-15")
+    features = make_features(frame, reference_date=ref_date)
+    assert features.loc[0, "listing_age_days"] == 14
+    assert features.loc[1, "listing_age_days"] == 5

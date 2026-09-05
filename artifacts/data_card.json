@@ -80,6 +80,7 @@
   },
   "date_min": "2025-05-03T21:29:00",
   "date_max": "2025-09-30T18:27:00",
+  "reference_date": "2025-09-24T18:51:00",
   "residential_property_types": [
     "Căn hộ chung cư",
     "Nhà riêng"
@@ -88,8 +89,9 @@
   "coordinates_available_percent": 27.722772277227726,
   "target": "Price (triệu VND, giá đăng)",
   "known_limitations": [
-    "Dữ liệu là giá đăng tham khảo, không phải giá giao dịch thực tế.",
-    "Địa chỉ và tọa độ còn thiếu ở một số bản ghi.",
-    "Tập dữ liệu sau làm sạch nhỏ (707 mẫu), một số phân khúc có số lượng mẫu < 20."
+    "Dữ liệu là giá đăng tham khảo từ tin rao, không phải giá giao dịch thực tế.",
+    "Phân phối giá nhà lệch mạnh (long tail) dẫn tới khoảng conformal rộng ở phân khúc cao cấp.",
+    "Thông tin địa chỉ và tọa độ GPS còn khuyết ở một số bản ghi.",
+    "Tập dữ liệu sau làm sạch quy mô nhỏ (707 mẫu), một số phân khúc ít mẫu."
   ]
 }

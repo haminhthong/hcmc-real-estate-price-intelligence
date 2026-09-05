@@ -69,20 +69,28 @@ def predict_one(
         cảnh báo, điểm chất lượng và phân tích SHAP (nếu có).
     """
     model_package = load_model()
+    reference_date = model_package.get("reference_date")
     row = pd.DataFrame([values])
-    feature_frame = make_features(row)
+    feature_frame = make_features(row, reference_date=reference_date)
 
     data_quality_score = float(feature_frame.iloc[0]["data_quality_score"])
-    log_prediction = float(model_package["pipeline"].predict(feature_frame)[0])
-    predicted_price = max(float(np.expm1(log_prediction)), 0.0)
+    target_formulation = model_package.get("target_formulation", "total_price")
+    area_val = float(values.get("Area", 1.0)) if pd.notna(values.get("Area")) and float(values.get("Area")) > 0 else 1.0
+
+    raw_pred = float(model_package["pipeline"].predict(feature_frame)[0])
+    if target_formulation == "price_per_m2":
+        predicted_price = max(float(np.expm1(raw_pred) * area_val), 0.0)
+    else:
+        predicted_price = max(float(np.expm1(raw_pred)), 0.0)
 
     # Tính toán khoảng tin cậy Conformal Prediction (Lower Bound & Upper Bound)
     error_quantile = float(model_package.get("residual_log_quantile", 0.25))
-    lower_bound = max(
-        float(np.expm1(log_prediction - error_quantile)),
-        0.0,
-    )
-    upper_bound = float(np.expm1(log_prediction + error_quantile))
+    if target_formulation == "price_per_m2":
+        lower_bound = max(float(np.expm1(raw_pred - error_quantile) * area_val), 0.0)
+        upper_bound = float(np.expm1(raw_pred + error_quantile) * area_val)
+    else:
+        lower_bound = max(float(np.expm1(raw_pred - error_quantile)), 0.0)
+        upper_bound = float(np.expm1(raw_pred + error_quantile))
 
     # So sánh cả đặc trưng gốc và đặc trưng được tạo với phạm vi huấn luyện.
     warnings: list[str] = []

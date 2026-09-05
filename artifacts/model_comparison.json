@@ -3,38 +3,141 @@
   "selection_metric": "mae_million",
   "recommended_model": "extra_trees",
   "deployed_model": "extra_trees",
+  "selected_target_formulation": "total_price",
   "deployment_approved": true,
-  "deployment_reason": "Extra Trees đạt MAE tốt hơn baseline trên tập Validation.",
-  "validation": {
-    "baseline_median": {
-      "mae_million": 4149.058999536266,
-      "median_ae_million": 2200.0,
-      "rmse_million": 7687.35605120716,
-      "r2": -0.13550530849976483,
-      "mape_percent": 54.58407633060685
+  "deployment_reason": "Mô hình extra_trees (target=total_price) đạt MAE tốt nhất trên Validation (3711.7 triệu vs Naive Median 4149.1 triệu).",
+  "validation_candidate_benchmarks": {
+    "total_price": {
+      "naive_median": {
+        "mae_million": 4149.058999536266,
+        "median_ae_million": 2200.0,
+        "rmse_million": 7687.35605120716,
+        "r2": -0.13550530849976483,
+        "mape_percent": 54.58407633060685
+      },
+      "ridge_linear": {
+        "mae_million": 6010.724598791947,
+        "median_ae_million": 1556.5399311442002,
+        "rmse_million": 20247.792749888096,
+        "r2": -6.877538775718957,
+        "mape_percent": 67.16710690059277
+      },
+      "random_forest": {
+        "mae_million": 3718.239939750497,
+        "median_ae_million": 1451.9791852435505,
+        "rmse_million": 6482.690553143721,
+        "r2": 0.1924939989097012,
+        "mape_percent": 63.43773653745944
+      },
+      "hist_gradient_boosting": {
+        "mae_million": 5216.935246397052,
+        "median_ae_million": 3886.8556992795993,
+        "rmse_million": 7380.8879146994595,
+        "r2": -0.04677272088321072,
+        "mape_percent": 98.63822092168407
+      },
+      "extra_trees": {
+        "mae_million": 3711.6977622502413,
+        "median_ae_million": 2155.4631683352904,
+        "rmse_million": 6010.49849972647,
+        "r2": 0.30584547025994924,
+        "mape_percent": 63.639522558769244
+      },
+      "district_property_segment_median": {
+        "mae_million": 4117.830188679245,
+        "median_ae_million": 2350.0,
+        "rmse_million": 7342.393156468192,
+        "r2": -0.03588238247855813,
+        "mape_percent": 59.05566676973862
+      }
     },
-    "extra_trees": {
-      "mae_million": 3659.068557370611,
-      "median_ae_million": 2303.0343879168727,
-      "rmse_million": 5840.78612793758,
-      "r2": 0.3444923207726661,
-      "mape_percent": 63.30798245484945
+    "price_per_m2": {
+      "naive_median": {
+        "mae_million": 3808.857950734396,
+        "median_ae_million": 2005.5408836897118,
+        "rmse_million": 6898.194581501362,
+        "r2": 0.08566349987016553,
+        "mape_percent": 57.989975665526984
+      },
+      "ridge_linear": {
+        "mae_million": 4531.140115582102,
+        "median_ae_million": 1956.609481674143,
+        "rmse_million": 13760.99842579724,
+        "r2": -2.6386062920798445,
+        "mape_percent": 51.65141391292616
+      },
+      "random_forest": {
+        "mae_million": 3946.7597464770324,
+        "median_ae_million": 1886.0773720351217,
+        "rmse_million": 6990.352913898788,
+        "r2": 0.0610696446673179,
+        "mape_percent": 66.41200814231223
+      },
+      "hist_gradient_boosting": {
+        "mae_million": 5656.040326228007,
+        "median_ae_million": 2892.5923359131384,
+        "rmse_million": 9903.79599323683,
+        "r2": -0.8846840165689778,
+        "mape_percent": 106.30175186558486
+      },
+      "extra_trees": {
+        "mae_million": 5180.389048630693,
+        "median_ae_million": 2181.832680010256,
+        "rmse_million": 8965.771850972591,
+        "r2": -0.5445804816100075,
+        "mape_percent": 81.65348340711486
+      },
+      "district_property_segment_median": {
+        "mae_million": 4117.830188679245,
+        "median_ae_million": 2350.0,
+        "rmse_million": 7342.393156468192,
+        "r2": -0.03588238247855813,
+        "mape_percent": 59.05566676973862
+      }
     }
   },
   "test_report_only": {
-    "baseline_median": {
+    "district_property_segment_median": {
+      "mae_million": 6098.738317757009,
+      "median_ae_million": 2850.0,
+      "rmse_million": 10050.864506919223,
+      "r2": -0.3828490250090766,
+      "mape_percent": 49.74430587717759
+    },
+    "naive_median": {
       "mae_million": 6305.572416744392,
       "median_ae_million": 3014.9788374296586,
       "rmse_million": 10139.841554625058,
       "r2": -0.40744122765734314,
       "mape_percent": 53.996525208071766
     },
+    "ridge_linear": {
+      "mae_million": 9722.767335862362,
+      "median_ae_million": 2567.324896392621,
+      "rmse_million": 35552.899846559776,
+      "r2": -16.30286382441523,
+      "mape_percent": 81.8133974184892
+    },
+    "random_forest": {
+      "mae_million": 5022.619835399417,
+      "median_ae_million": 2699.2772059059444,
+      "rmse_million": 7583.147538529617,
+      "r2": 0.21283288509972487,
+      "mape_percent": 57.143045128906564
+    },
+    "hist_gradient_boosting": {
+      "mae_million": 5300.841076704257,
+      "median_ae_million": 3413.2064189287858,
+      "rmse_million": 7632.581188317159,
+      "r2": 0.2025365335020799,
+      "mape_percent": 69.37588668890223
+    },
     "extra_trees": {
-      "mae_million": 5013.311524752092,
-      "median_ae_million": 2929.8465981826303,
-      "rmse_million": 7490.697884803455,
-      "r2": 0.23190932274239584,
-      "mape_percent": 53.740800557319226
+      "mae_million": 5034.629014829328,
+      "median_ae_million": 2838.1196059446775,
+      "rmse_million": 7582.994728297524,
+      "r2": 0.21286460965128928,
+      "mape_percent": 53.337683138978754
     }
   }
 }

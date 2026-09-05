@@ -33,12 +33,16 @@ def test_missing_model_artifact_raises_file_not_found():
         load_model(fake_path)
 
 
-def test_malformed_model_artifact_raises_value_error(tmp_path):
+import tempfile
+
+
+def test_malformed_model_artifact_raises_value_error():
     load_model.cache_clear()
-    bad_path = tmp_path / "bad_model.joblib"
-    joblib.dump({"invalid_key": "data"}, bad_path)
-    with pytest.raises(ValueError, match="không đúng cấu trúc"):
-        load_model(bad_path)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        bad_path = Path(temp_dir) / "bad_model.joblib"
+        joblib.dump({"invalid_key": "data"}, bad_path)
+        with pytest.raises(ValueError, match="không đúng cấu trúc"):
+            load_model(bad_path)
 
 
 def test_real_model_prediction_schema():

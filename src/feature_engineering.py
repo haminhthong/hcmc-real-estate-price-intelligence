@@ -54,7 +54,10 @@ def _distance_to_cbd(latitude: pd.Series, longitude: pd.Series) -> pd.Series:
     return 6371.0 * 2 * np.arcsin(np.sqrt(haversine))
 
 
-def add_quality_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_quality_features(
+    df: pd.DataFrame,
+    reference_date: pd.Timestamp | None = None,
+) -> pd.DataFrame:
     """Tính toán tuổi tin đăng và điểm đầy đủ dữ liệu (Data Quality Score) 0 - 100%.
 
     Điểm đầy đủ dữ liệu được tính dựa trên tỷ lệ các trường thông tin quan trọng
@@ -62,18 +65,23 @@ def add_quality_features(df: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         df: DataFrame đầu vào.
+        reference_date: Mốc thời gian tham chiếu tính tuổi tin đăng. Nếu không truyền,
+            sẽ lấy ngày lớn nhất trong `df["listing_date"]`.
 
     Returns:
         DataFrame được bổ sung hai cột `listing_age_days` và `data_quality_score`.
     """
     out = df.copy()
 
-    # Tính số ngày kể từ mốc thời gian tin đăng gần nhất
-    if "listing_date" in out:
-        newest_date = out["listing_date"].max()
-        out["listing_age_days"] = (newest_date - out["listing_date"]).dt.days
+    # Tính số ngày kể từ mốc thời gian tin đăng tham chiếu (chống leakage & skew)
+    if "listing_date" in out and out["listing_date"].notna().any():
+        if reference_date is None:
+            ref_date = out["listing_date"].max()
+        else:
+            ref_date = pd.to_datetime(reference_date)
+        out["listing_age_days"] = (ref_date - out["listing_date"]).dt.days.clip(lower=0)
     else:
-        out["listing_age_days"] = np.nan
+        out["listing_age_days"] = 0 if reference_date is not None else np.nan
 
     # Các thuộc tính xem xét điểm chất lượng
     quality_columns: list[str] = [
@@ -124,23 +132,27 @@ def add_text_flags(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def make_features(df: pd.DataFrame) -> pd.DataFrame:
+def make_features(
+    df: pd.DataFrame,
+    reference_date: pd.Timestamp | None = None,
+) -> pd.DataFrame:
     """Tổng hợp và tạo hoàn chỉnh đúng tập đặc trưng (MODEL_FEATURES) mô hình yêu cầu.
 
     Quy trình:
     1. Bổ sung cờ tiện ích (`add_text_flags`).
-    2. Bổ sung đặc trưng chất lượng (`add_quality_features`).
+    2. Bổ sung đặc trưng chất lượng (`add_quality_features`) với reference_date cố định.
     3. Tính khoảng cách Haversine tới trung tâm Quận 1 (`distance_to_cbd_km`).
     4. Bổ sung các cột thiếu với giá trị 0 (với cờ) hoặc NaN (với thuộc tính số/hạng mục).
     5. Đảm bảo thứ tự cột hoàn toàn khớp với `MODEL_FEATURES`.
 
     Args:
         df: DataFrame chứa thông tin đã qua bước làm sạch ban đầu.
+        reference_date: Mốc thời gian tham chiếu chuẩn hóa tuổi tin đăng.
 
     Returns:
         DataFrame chỉ chứa các cột đặc trưng mô hình dùng để fit/predict.
     """
-    out = add_quality_features(add_text_flags(df))
+    out = add_quality_features(add_text_flags(df), reference_date=reference_date)
 
     latitude = pd.to_numeric(
         (
@@ -167,3 +179,4 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Thay thế các giá trị vô cực nếu có
     return out[MODEL_FEATURES].replace([np.inf, -np.inf], np.nan)
+
