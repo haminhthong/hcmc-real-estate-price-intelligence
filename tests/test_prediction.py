@@ -2,6 +2,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.predict import load_model, predict_one
@@ -120,3 +121,106 @@ def test_optional_fields_all_missing():
     result = predict_one(minimal_input)
     assert result["predicted_price_million"] > 0
     assert result["data_quality_score"] > 0
+
+
+def test_conformal_residual_space_matches_inference_space():
+    """P0 TEST: Kiểm chứng không gian conformal residual khớp với inference log-space.
+
+    1. Mô hình dự báo trên log1p(Price).
+    2. Conformal residual được tính trên thang log: e_i = |log1p(y_i) - y_hat_log|.
+    3. Phân vị quantile q được áp dụng đối xứng trên thang log: [y_hat_log - q, y_hat_log + q].
+    4. Ánh xạ ngược expm1 tạo ra khoảng dự báo bất đối xứng trên thang tiền tệ VND:
+       upper - predicted != predicted - lower.
+    5. Điều kiện bao phủ trên thang giá [lower, upper] tương đương toán học với thang log.
+    """
+    load_model.cache_clear()
+    pkg = load_model()
+    q = pkg["residual_log_quantile"]
+    assert q > 0, "Quantile conformal residual trong log-space phải dương"
+
+    sample_input = {
+        "Property Type": "Nhà riêng",
+        "location_area": "Quận 1",
+        "Area": 80.0,
+        "Bedrooms": 3,
+    }
+    result = predict_one(sample_input)
+    pred_price = result["predicted_price_million"]
+    lower_price = result["lower_bound_million"]
+    upper_price = result["upper_bound_million"]
+
+    # Khoảng tiền tệ là bất đối xứng (Asymmetric Monetary Interval)
+    diff_upper = upper_price - pred_price
+    diff_lower = pred_price - lower_price
+    assert diff_upper > diff_lower, "Do tính lồi của hàm mũ expm1, khoảng cách cận trên phải lớn hơn cận dưới"
+
+    # Kiểm tra tính tương đương toán học giữa log-space và price-space
+    log_pred = np.log1p(pred_price)
+    expected_lower = np.expm1(log_pred - q)
+    expected_upper = np.expm1(log_pred + q)
+    assert np.isclose(lower_price, expected_lower, rtol=1e-2)
+    assert np.isclose(upper_price, expected_upper, rtol=1e-2)
+
+
+def test_comparable_engine_returns_valid_matches():
+    """P1 TEST: Kiểm tra động cơ tìm kiếm bất động sản tương đồng."""
+    load_model.cache_clear()
+    sample_input = {
+        "Property Type": "Nhà riêng",
+        "location_area": "Quận 1",
+        "Area": 80.0,
+        "Bedrooms": 3,
+    }
+    result = predict_one(sample_input)
+    assert "comparables" in result
+    assert isinstance(result["comparables"], list)
+    assert len(result["comparables"]) >= 1
+    top_comp = result["comparables"][0]
+    assert "property_type" in top_comp
+    assert "similarity_score" in top_comp
+    assert 0.0 <= top_comp["similarity_score"] <= 1.0
+    assert result["market_context"]["comparable_median_price_million"] is not None
+
+
+def test_days_from_reference_no_negative_collapse():
+    """P0 TEST: Đảm bảo listing_date mới hơn mốc tham chiếu không bị collapse về 0."""
+    from src.feature_engineering import make_features
+    ref_date = pd.Timestamp("2025-01-01")
+    # Tin đăng mới hơn 100 ngày
+    future_listing = pd.DataFrame([{"listing_date": pd.Timestamp("2025-04-11")}])
+    features = make_features(future_listing, reference_date=ref_date)
+    assert features["days_from_train_reference"].iloc[0] == 100
+    assert features["days_from_train_reference"].iloc[0] != 0
+
+
+def test_text_flag_negation_handling():
+    """P1 TEST: Kiểm tra xử lý từ phủ định cho các cờ nhị phân."""
+    from src.feature_engineering import make_features
+    # Nhà không có nội thất
+    row_no_furniture = pd.DataFrame([{"Title": "Nhà đẹp", "Description": "nhà trống không có nội thất, hẻm ô tô"}])
+    feats_no = make_features(row_no_furniture)
+    assert feats_no["has_furniture"].iloc[0] == 0
+    assert feats_no["car_alley"].iloc[0] == 1
+
+    # Nhà có nội thất
+    row_furniture = pd.DataFrame([{"Title": "Nhà đẹp", "Description": "full nội thất cao cấp"}])
+    feats_yes = make_features(row_furniture)
+    assert feats_yes["has_furniture"].iloc[0] == 1
+
+
+def test_decomposed_reliability_structure():
+    """P0 TEST: Kiểm tra cấu trúc độ tin cậy phân rã đa chiều."""
+    sample_input = {
+        "Property Type": "Nhà riêng",
+        "location_area": "Quận 1",
+        "Area": 80.0,
+        "Bedrooms": 3,
+    }
+    result = predict_one(sample_input)
+    assert "reliability" in result
+    rel = result["reliability"]
+    assert rel["overall"] in ("low", "medium", "high")
+    assert rel["reliability_level"] in ("low", "medium", "high")
+    assert "input_completeness_score" in rel
+    assert rel["domain_support"] in ("in_domain", "warning_ood")
+    assert rel["interval_risk"] in ("tight", "moderate", "wide_interval")

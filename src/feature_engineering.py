@@ -5,6 +5,7 @@ Tệp này tính toán các thuộc tính khoảng cách địa lý (Haversine d
 và trích xuất các cờ tiện ích (binary flags) từ văn bản mô tả.
 """
 
+import re
 import numpy as np
 import pandas as pd
 
@@ -13,11 +14,14 @@ from .config import FLAG_FEATURES, MODEL_FEATURES
 # Từ khóa dùng để tạo các cờ nhị phân
 KEYWORDS: dict[str, list[str]] = {
     "has_furniture": ["nội thất", "full nội thất"],
-    "car_alley": ["hẻm xe hơi", "ô tô vào", "oto vào", "hxh"],
+    "car_alley": ["hẻm xe hơi", "hẻm ô tô", "hẻm oto", "ô tô vào", "oto vào", "hxh"],
     "near_market": ["gần chợ", "sát chợ"],
     "near_school": ["gần trường", "đại học", "trường học"],
     "is_urgent_sale": ["cần bán gấp", "bán gấp", "chính chủ"],
 }
+
+# Tiền tố phủ định tiếng Việt
+NEGATION_PATTERN: str = r"(?:không|chưa|chẳng|ko|chua|khong)\s+(?:có\s+|được\s+)?"
 
 # Tọa độ địa lý trung tâm TP.HCM (Chợ Bến Thành / Quận 1)
 CBD_LATITUDE: float = 10.7769
@@ -58,32 +62,36 @@ def add_quality_features(
     df: pd.DataFrame,
     reference_date: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    """Tính toán tuổi tin đăng và điểm đầy đủ dữ liệu (Data Quality Score) 0 - 100%.
+    """Tính toán độ chênh lệch ngày so với train reference date và điểm đầy đủ dữ liệu (0 - 100%).
 
-    Điểm đầy đủ dữ liệu được tính dựa trên tỷ lệ các trường thông tin quan trọng
-    không bị khuyết (NaN hoặc 'Không rõ').
+    Nguyên lý:
+    - days_from_train_reference: listing_date - train_reference_date (không clip lower=0 để tránh
+      collapse toàn bộ listing mới về 0 khi inference).
+    - input_completeness_score: Tỷ lệ các thuộc tính đo lường không bị khuyết (NaN hoặc 'Không rõ').
 
     Args:
         df: DataFrame đầu vào.
-        reference_date: Mốc thời gian tham chiếu tính tuổi tin đăng. Nếu không truyền,
-            sẽ lấy ngày lớn nhất trong `df["listing_date"]`.
+        reference_date: Mốc thời gian tham chiếu tính tuổi tin đăng từ tập Train.
 
     Returns:
-        DataFrame được bổ sung hai cột `listing_age_days` và `data_quality_score`.
+        DataFrame được bổ sung `days_from_train_reference` và `input_completeness_score`.
     """
     out = df.copy()
 
-    # Tính số ngày kể từ mốc thời gian tin đăng tham chiếu (chống leakage & skew)
+    # Tính độ lệch thời gian tương đối so với train reference date
     if "listing_date" in out and out["listing_date"].notna().any():
         if reference_date is None:
             ref_date = out["listing_date"].max()
         else:
             ref_date = pd.to_datetime(reference_date)
-        out["listing_age_days"] = (ref_date - out["listing_date"]).dt.days.clip(lower=0)
+        out["days_from_train_reference"] = (out["listing_date"] - ref_date).dt.days
     else:
-        out["listing_age_days"] = 0 if reference_date is not None else np.nan
+        out["days_from_train_reference"] = 0 if reference_date is not None else np.nan
 
-    # Các thuộc tính xem xét điểm chất lượng
+    # Giữ alias listing_age_days cho khả năng tương thích ngược
+    out["listing_age_days"] = out["days_from_train_reference"]
+
+    # Các thuộc tính xem xét điểm hoàn thiện dữ liệu
     quality_columns: list[str] = [
         "Bedrooms", "Bathrooms", "Floors", "Width", "Length",
         "Alley Width", "Direction", "Position", "Latitude", "Longitude",
@@ -91,16 +99,19 @@ def add_quality_features(
     quality_frame = out.reindex(columns=quality_columns)
     quality_frame = quality_frame.mask(quality_frame.eq("Không rõ"))
 
-    # Tỷ lệ % điền đầy đủ các thông tin
-    out["data_quality_score"] = quality_frame.notna().mean(axis=1) * 100
+    # Điểm hoàn thiện dữ liệu đầu vào (%)
+    out["input_completeness_score"] = quality_frame.notna().mean(axis=1) * 100
+    out["data_quality_score"] = out["input_completeness_score"]
     return out
 
 
 def add_text_flags(df: pd.DataFrame) -> pd.DataFrame:
-    """Trích xuất cờ tiện ích từ tiêu đề và nội dung tin đăng bằng NLP Regex đơn giản.
+    """Trích xuất cờ tiện ích từ tiêu đề và nội dung tin đăng, có xử lý phủ định.
 
-    Nếu người dùng chưa truyền trực tiếp các giá trị nhị phân này, hệ thống sẽ tự động
-    quét các từ khóa xuất hiện trong tiêu đề (Title) và mô tả (Description).
+    Quy trình:
+    1. Loại trừ các cụm từ bị phủ định (ví dụ: 'không có nội thất', 'chưa có nội thất').
+    2. Quét các từ khóa khẳng định còn lại để gán nhãn 1, ngược lại 0.
+    3. Nếu người dùng đã chỉ định cờ trong df thì ưu tiên giá trị được cấp.
 
     Args:
         df: DataFrame đầu vào.
@@ -116,14 +127,20 @@ def add_text_flags(df: pd.DataFrame) -> pd.DataFrame:
         else pd.Series("", index=out.index)
     )
 
-    text = (
+    raw_text = (
         title.fillna("").astype(str)
         + " "
         + description.fillna("").astype(str)
     ).str.lower()
 
     for flag, keywords in KEYWORDS.items():
-        extracted = text.str.contains("|".join(keywords), regex=True).astype(int)
+        kw_pattern = "|".join(re.escape(k) for k in keywords)
+        neg_kw_pattern = rf"{NEGATION_PATTERN}(?:{kw_pattern})"
+
+        # Xóa các cụm phủ định trước khi kiểm tra từ khóa khẳng định
+        sanitized_text = raw_text.str.replace(neg_kw_pattern, "", regex=True)
+        extracted = sanitized_text.str.contains(kw_pattern, regex=True).astype(int)
+
         if flag in out:
             supplied = pd.to_numeric(out[flag], errors="coerce")
             out[flag] = supplied.where(supplied.notna(), extracted).clip(0, 1)
@@ -139,15 +156,15 @@ def make_features(
     """Tổng hợp và tạo hoàn chỉnh đúng tập đặc trưng (MODEL_FEATURES) mô hình yêu cầu.
 
     Quy trình:
-    1. Bổ sung cờ tiện ích (`add_text_flags`).
-    2. Bổ sung đặc trưng chất lượng (`add_quality_features`) với reference_date cố định.
+    1. Bổ sung cờ tiện ích có xử lý phủ định (`add_text_flags`).
+    2. Bổ sung đặc trưng hoàn thiện dữ liệu và thời gian (`add_quality_features`).
     3. Tính khoảng cách Haversine tới trung tâm Quận 1 (`distance_to_cbd_km`).
     4. Bổ sung các cột thiếu với giá trị 0 (với cờ) hoặc NaN (với thuộc tính số/hạng mục).
     5. Đảm bảo thứ tự cột hoàn toàn khớp với `MODEL_FEATURES`.
 
     Args:
         df: DataFrame chứa thông tin đã qua bước làm sạch ban đầu.
-        reference_date: Mốc thời gian tham chiếu chuẩn hóa tuổi tin đăng.
+        reference_date: Mốc thời gian tham chiếu chuẩn hóa từ tập Train.
 
     Returns:
         DataFrame chỉ chứa các cột đặc trưng mô hình dùng để fit/predict.

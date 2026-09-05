@@ -160,20 +160,105 @@ class PredictionRequest(BaseModel):
         return value
 
 
-class PredictionResponse(BaseModel):
-    """Dữ liệu kết quả phản hồi dự báo từ API."""
+class PredictionInterval(BaseModel):
+    """Khoảng dự báo Conformal Prediction."""
 
+    lower_bound_million: float = Field(..., description="Cận dưới khoảng dự báo conformal (triệu VND)")
+    upper_bound_million: float = Field(..., description="Cận trên khoảng dự báo conformal (triệu VND)")
+    target_coverage: float = Field(0.8, description="Mức độ bao phủ mục tiêu (0.8 = 80%)")
+
+
+class ValuationResponse(BaseModel):
+    """Thông tin định giá điểm trung tâm và khoảng dự báo."""
+
+    point_estimate_million: float = Field(..., description="Giá dự báo điểm trung tâm (triệu VND)")
+    prediction_interval: PredictionInterval
+
+
+class MarketContextResponse(BaseModel):
+    """Bối cảnh thị trường và đơn giá phân khúc cùng loại."""
+
+    segment_median_unit_price_million_m2: float | None = Field(
+        None, description="Trung vị đơn giá cùng phân khúc loại hình x quận/huyện (triệu VND/m²)"
+    )
+    comparable_median_price_million: float | None = Field(
+        None, description="Trung vị giá của các bất động sản tương đồng (triệu VND)"
+    )
+    comparable_median_unit_price_million_m2: float | None = Field(
+        None, description="Trung vị đơn giá của các bất động sản tương đồng (triệu VND/m²)"
+    )
+
+
+class ReliabilityResponse(BaseModel):
+    """Đánh giá độ tin cậy phân rã đa chiều (Decomposed Reliability)."""
+
+    overall: Literal["low", "medium", "high"] = Field(..., description="Độ tin cậy tổng thể")
+    reliability_level: Literal["low", "medium", "high"] = Field(..., description="Mức độ tin cậy chuẩn hóa")
+    input_completeness_score: float = Field(..., ge=0, le=100, description="Điểm hoàn thiện dữ liệu đầu vào (%)")
+    domain_support: str = Field(..., description="Đánh giá thuộc phân phối huấn luyện (in_domain hoặc warning_ood)")
+    interval_risk: str = Field(..., description="Mức độ rủi ro độ rộng khoảng dự báo (tight, moderate, wide_interval)")
+    warnings: list[str] = Field(default_factory=list, description="Danh sách các cảnh báo OOD hoặc dữ liệu")
+
+
+class ComparableProperty(BaseModel):
+    """Thông tin bất động sản tương đồng từ tập dữ liệu tham chiếu."""
+
+    property_type: str
+    location_area: str
+    area: float | None = None
+    price_million: float | None = None
+    unit_price_million_m2: float | None = None
+    bedrooms: int | None = None
+    bathrooms: int | None = None
+    floors: int | None = None
+    distance_to_cbd_km: float | None = None
+    similarity_score: float = 1.0
+
+
+class ModelMetaResponse(BaseModel):
+    """Thông số siêu dữ liệu của mô hình phục vụ."""
+
+    version: str
+    model_type: str = "ExtraTreesRegressor"
+    target_formulation: str = "total_price"
+
+
+class PredictionResponse(BaseModel):
+    """Dữ liệu kết quả phản hồi định giá Price Intelligence hoàn chỉnh."""
+
+    # Schema phân tầng hiện đại
+    valuation: ValuationResponse | None = None
+    market_context: MarketContextResponse | None = None
+    reliability: ReliabilityResponse | None = None
+    comparables: list[ComparableProperty] = Field(default_factory=list, description="Bất động sản tương đồng")
+    explanation: dict[str, Any] | None = None
+    model: ModelMetaResponse | None = None
+
+    # Các trường phẳng tương thích ngược (Flat aliases)
     predicted_price_million: float = Field(..., description="Giá dự báo điểm trung tâm (triệu VND)")
-    lower_bound_million: float = Field(..., description="Cận dưới khoảng tin cậy conformal (triệu VND)")
-    upper_bound_million: float = Field(..., description="Cận trên khoảng tin cậy conformal (triệu VND)")
+    lower_bound_million: float = Field(..., description="Cận dưới khoảng dự báo conformal (triệu VND)")
+    upper_bound_million: float = Field(..., description="Cận trên khoảng dự báo conformal (triệu VND)")
     confidence: Literal["low", "medium", "high"] = Field(
         ...,
-        description="Chỉ báo heuristic dựa trên độ rộng khoảng dự báo và chất lượng dữ liệu",
+        description="Chỉ báo heuristic độ tin cậy (low / medium / high)",
+    )
+    reliability_level: Literal["low", "medium", "high"] = Field(
+        default="medium",
+        description="Chỉ báo độ tin cậy chuẩn hóa",
     )
     model_version: str = Field(..., description="Phiên bản mô hình đang phục vụ")
-    warnings: list[str] = Field(..., description="Danh sách các cảnh báo về dữ liệu hoặc phạm vi huấn luyện")
-    data_quality_score: float = Field(..., ge=0, le=100, description="Điểm chất lượng dữ liệu đầu vào (0-100%)")
-    top_contributions: list[dict[str, Any]] = Field(..., description="Top 5 đặc trưng ảnh hưởng nhiều nhất (SHAP values)")
+    warnings: list[str] = Field(default_factory=list, description="Danh sách các cảnh báo")
+    data_quality_score: float = Field(..., ge=0, le=100, description="Điểm hoàn thiện dữ liệu (0-100%)")
+    input_completeness_score: float = Field(
+        default=100.0,
+        ge=0,
+        le=100,
+        description="Điểm hoàn thiện dữ liệu đầu vào",
+    )
+    top_contributions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Top 5 đặc trưng ảnh hưởng nhiều nhất (SHAP values)",
+    )
     segment_median_unit_price_million_m2: float | None = Field(
         None, description="Trung vị đơn giá cùng phân khúc loại hình x quận/huyện (triệu VND/m²)"
     )

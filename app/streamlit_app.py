@@ -148,7 +148,7 @@ with tab_predict:
             st.session_state["last_result"] = result
 
             st.divider()
-            st.subheader("🎯 Kết Quả Ước Lượng Giá")
+            st.subheader("🎯 Kết Quả Ước Lượng Giá & Price Intelligence")
 
             res_c1, res_c2, res_c3 = st.columns(3)
 
@@ -157,47 +157,73 @@ with tab_predict:
             upper_billion = result["upper_bound_million"] / 1000
 
             res_c1.metric(
-                label="Giá Ước Tính (Dự Báo Điểm)",
+                label="Giá Ước Tính (Point Estimate)",
                 value=f"{price_billion:,.2f} tỷ VND",
-                help="Giá trị trung tâm được dự báo từ mô hình Extra Trees.",
+                help="Giá trị trung tâm được dự báo từ mô hình Machine Learning.",
             )
 
             res_c2.metric(
-                label="Khoảng Tin Cậy (Coverage 80%)",
+                label="Khoảng Dự Báo (Prediction Interval 80%)",
                 value=f"{lower_billion:,.2f} – {upper_billion:,.2f} tỷ",
-                help="Khoảng giá dự kiến chứa 80% trường hợp thực tế nhờ Conformal Prediction.",
+                help="Khoảng dự báo bao phủ 80% trường hợp thực tế nhờ Split Conformal Residuals.",
             )
 
-            confidence_labels = {
+            reliability_info = result.get("reliability", {})
+            rel_level = reliability_info.get("overall", result.get("confidence", "medium"))
+            reliability_labels = {
                 "low": "🔴 THẤP (Cần thận trọng)",
                 "medium": "🟡 TRUNG BÌNH",
                 "high": "🟢 CAO",
             }
             res_c3.metric(
-                label="Mức Độ Tin Cậy Mô Hình",
-                value=confidence_labels[result["confidence"]],
-                help="Dựa trên biên độ khoảng tin cậy và sự đầy đủ của dữ liệu đầu vào.",
+                label="Mức Độ Tin Cậy (Reliability Level)",
+                value=reliability_labels.get(rel_level, rel_level),
+                help="Đánh giá kết hợp giữa độ rộng khoảng dự báo, miền phân phối OOD và mức độ hoàn thiện dữ liệu.",
             )
 
-            # Thanh điểm chất lượng dữ liệu
+            # Thanh điểm hoàn thiện dữ liệu
+            completeness = result.get("input_completeness_score", result.get("data_quality_score", 100.0))
             st.progress(
-                result["data_quality_score"] / 100,
-                text=f"Điểm Đầy Đủ Dữ Liệu Đầu Vào: {result['data_quality_score']:.0f}/100%",
+                completeness / 100,
+                text=f"Điểm Hoàn Thiện Dữ Liệu Đầu Vào: {completeness:.0f}/100%",
             )
 
             # Cảnh báo nếu có
             if result["warnings"]:
-                with st.expander("⚠️ Danh Sách Cảnh Báo Tính Hợp Lệ Dữ Liệu", expanded=True):
+                with st.expander("⚠️ Cảnh Báo Tính Hợp Lệ & Phân Phối Dữ Liệu (OOD)", expanded=True):
                     for warning in result["warnings"]:
                         st.warning(warning)
 
-            # Thông tin đơn giá phân khúc
-            segment_price = result["segment_median_unit_price_million_m2"]
+            # Thông tin thị trường & Bất động sản tương đồng
+            st.markdown("### 🏘️ Bối Cảnh Thị Trường & Bất Động Sản Tương Đồng (Comparables)")
+            m_ctx = result.get("market_context", {})
+            col_m1, col_m2 = st.columns(2)
+            segment_price = m_ctx.get("segment_median_unit_price_million_m2", result.get("segment_median_unit_price_million_m2"))
+            comp_price = m_ctx.get("comparable_median_price_million")
+
             if segment_price is not None:
-                st.info(
-                    f"💡 **Tham khảo thị trường**: Trung vị đơn giá cùng phân khúc "
-                    f"({property_type} tại {area_name}) là **{segment_price:,.1f} triệu VND/m²**."
-                )
+                col_m1.info(f"💡 **Trung vị phân khúc**: **{segment_price:,.1f} triệu VND/m²** ({property_type} tại {area_name})")
+            if comp_price is not None:
+                col_m2.info(f"📍 **Trung vị bất động sản tương đồng**: **{comp_price / 1000:,.2f} tỷ VND**")
+
+            # Bảng so sánh bất động sản tương đồng
+            comparables = result.get("comparables", [])
+            if comparables:
+                comp_df = pd.DataFrame(comparables)
+                display_cols = {
+                    "property_type": "Loại hình",
+                    "location_area": "Khu vực",
+                    "area": "Diện tích (m²)",
+                    "price_million": "Giá (triệu VND)",
+                    "unit_price_million_m2": "Đơn giá (tr/m²)",
+                    "bedrooms": "PN",
+                    "bathrooms": "WC",
+                    "distance_to_cbd_km": "Cách CBD (km)",
+                    "similarity_score": "Độ tương đồng",
+                }
+                valid_cols = [c for c in display_cols if c in comp_df.columns]
+                comp_display = comp_df[valid_cols].rename(columns=display_cols)
+                st.dataframe(comp_display, use_container_width=True, hide_index=True)
 
             st.caption(f"📌 *{result['disclaimer']}*")
 
@@ -215,14 +241,17 @@ with tab_shap:
 
         if contributions:
             chart_df = pd.DataFrame(contributions)
-            chart_df.rename(
-                columns={"feature": "Đặc Trưng", "shap_value": "Tác Động SHAP (Log-Scale)"},
-                inplace=True,
-            )
+            # Ưu tiên sử dụng nhãn tiếng Việt thân thiện
+            if "friendly_name" in chart_df.columns:
+                chart_df["Đặc Trưng"] = chart_df["friendly_name"]
+            else:
+                chart_df["Đặc Trưng"] = chart_df["feature"]
+
+            chart_df["Tác Động SHAP (Log-Scale)"] = chart_df["shap_value"]
 
             st.markdown(
-                "Đồ thị dưới đây hiển thị 5 yếu tố có ảnh hưởng mạnh nhất đến giá trị định giá bất động sản của bạn. "
-                "Giá trị SHAP dương thể hiện yếu tố làm **tăng giá**, giá trị âm thể hiện yếu tố làm **giảm giá**."
+                "Đồ thị dưới đây hiển thị 5 yếu tố có mức độ đóng góp cao nhất vào ước lượng của mô hình (trong không gian log-target). "
+                "Lưu ý: Giá trị SHAP biểu thị đóng góp thống kê của mô hình, không phải quan hệ nhân quả tuyệt đối."
             )
 
             col_chart, col_table = st.columns([2, 1])
@@ -234,7 +263,8 @@ with tab_shap:
                 )
 
             with col_table:
-                st.dataframe(chart_df, use_container_width=True, hide_index=True)
+                display_shap = chart_df[["Đặc Trưng", "Tác Động SHAP (Log-Scale)"]]
+                st.dataframe(display_shap, use_container_width=True, hide_index=True)
         else:
             st.info("Chưa có dữ liệu SHAP.")
     else:

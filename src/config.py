@@ -33,8 +33,9 @@ MODEL_COMPARISON_PATH: Path = ROOT_DIR / "artifacts" / "model_comparison.json"
 ERROR_ANALYSIS_PATH: Path = ROOT_DIR / "artifacts" / "error_analysis.json"
 DATA_CARD_PATH: Path = ROOT_DIR / "artifacts" / "data_card.json"
 
-# Phiên bản mô hình và hạt giống ngẫu nhiên để tái lập kết quả
-MODEL_VERSION: str = "1.0.0"
+# Phiên bản mô hình, schema artifact và hạt giống ngẫu nhiên để tái lập kết quả
+MODEL_VERSION: str = "1.1.0"
+ARTIFACT_SCHEMA_VERSION: int = 2
 RANDOM_STATE: int = 42
 
 # ---------------------------------------------------------------------------
@@ -70,8 +71,8 @@ NUMERIC_FEATURES: list[str] = [
     "Latitude",
     "Longitude",
     "distance_to_cbd_km",
-    "listing_age_days",
-    "data_quality_score",
+    "days_from_train_reference",
+    "input_completeness_score",
 ]
 
 # Các đặc trưng phân loại

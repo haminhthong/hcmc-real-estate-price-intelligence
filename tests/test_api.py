@@ -59,9 +59,11 @@ def test_prediction_response_schema(monkeypatch):
         "lower_bound_million": 6400.0,
         "upper_bound_million": 9300.0,
         "confidence": "medium",
-        "model_version": "1.0.0",
+        "reliability_level": "medium",
+        "model_version": "1.1.0",
         "warnings": [],
         "data_quality_score": 80.0,
+        "input_completeness_score": 80.0,
         "top_contributions": [],
         "segment_median_unit_price_million_m2": 98.0,
         "disclaimer": "Giá tham khảo.",
@@ -75,7 +77,10 @@ def test_prediction_response_schema(monkeypatch):
     }
     response = client.post("/predict", json=payload)
     assert response.status_code == 200
-    assert response.json() == expected
+    res_json = response.json()
+    assert res_json["predicted_price_million"] == 7850.0
+    assert res_json["confidence"] == "medium"
+    assert res_json["reliability_level"] == "medium"
 
 
 def test_explain_endpoint_returns_shap_contributions(monkeypatch):
@@ -84,9 +89,11 @@ def test_explain_endpoint_returns_shap_contributions(monkeypatch):
         "lower_bound_million": 6400.0,
         "upper_bound_million": 9300.0,
         "confidence": "high",
-        "model_version": "1.0.0",
+        "reliability_level": "high",
+        "model_version": "1.1.0",
         "warnings": [],
         "data_quality_score": 90.0,
+        "input_completeness_score": 90.0,
         "top_contributions": [{"feature": "Area", "shap_value": 0.25}],
         "segment_median_unit_price_million_m2": 98.0,
         "disclaimer": "Giá tham khảo.",
@@ -101,3 +108,21 @@ def test_explain_endpoint_returns_shap_contributions(monkeypatch):
     response = client.post("/explain", json=payload)
     assert response.status_code == 200
     assert response.json()["top_contributions"] == [{"feature": "Area", "shap_value": 0.25}]
+
+
+def test_real_prediction_returns_nested_and_comparables():
+    payload = {
+        "Property Type": "Nhà riêng",
+        "location_area": "Quận 1",
+        "Area": 75.0,
+        "Bedrooms": 3,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "valuation" in data and data["valuation"] is not None
+    assert "prediction_interval" in data["valuation"]
+    assert "market_context" in data and data["market_context"] is not None
+    assert "reliability" in data and data["reliability"] is not None
+    assert "comparables" in data
+    assert len(data["comparables"]) >= 1

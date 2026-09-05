@@ -1,16 +1,16 @@
-"""Mô-đun huấn luyện, so sánh mô hình, hiệu chỉnh khoảng tin cậy và lưu trữ artifacts.
+"""Mô-đun huấn luyện, so sánh mô hình, hiệu chỉnh khoảng dự báo (Prediction Interval) và lưu trữ artifacts.
 
 Tệp này đảm nhiệm quy trình MLOps huấn luyện end-to-end:
 1. Xây dựng pipeline scikit-learn với tiền xử lý chuẩn hóa và các thuật toán hồi quy.
 2. Chia nhóm theo thời gian (Grouped Temporal Split) 60/15/10/15 dựa trên ngày đăng muộn nhất của mỗi nhóm bất động sản.
 3. Sử dụng mốc ngày tham chiếu (`reference_date`) tính từ tập Train để chống Data Leakage & Training-Serving Skew.
 4. Thử nghiệm hai cách đặt bài toán Target: Total Price (`log1p(Price)`) vs Price/m² (`log1p(Price/Area)`).
-5. So sánh đa mô hình (Naive Median, District x Property-Type Median, Ridge Linear, Random Forest, HistGradientBoosting, ExtraTrees) trên tập Validation.
-6. Sử dụng Conformal Prediction xác định khoảng tin cậy không phụ thuộc phân phối (Target Coverage 80%) trên tập Calibration.
-7. Đánh giá kiểm thử độc lập và phân tích sâu độ bao phủ/độ rộng khoảng tin cậy theo phân khúc loại hình, quận/huyện, tầm giá trên tập Test.
+5. So sánh đa mô hình (Naive Median, District x Property-Type Segment Appraisal, Ridge Linear, Random Forest, HistGradientBoosting, ExtraTrees) trên tập Validation.
+6. Sử dụng Split Conformal Prediction xác định khoảng dự báo (Prediction Interval) không phụ thuộc phân phối (Target Coverage 80%) trên tập Calibration.
+7. Đánh giá kiểm thử độc lập trên Test và phân tích sâu độ bao phủ theo phân khúc loại hình, quận/huyện, tầm giá, khoảng cách CBD và điểm hoàn thiện dữ liệu.
+8. Đóng gói tập dữ liệu tham chiếu (reference listings) cho Comparable Properties Engine phục vụ tra cứu thị trường thực địa.
 """
 
-json_import = True
 import json
 import os
 from pathlib import Path
@@ -38,6 +38,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from .config import (
+    ARTIFACT_SCHEMA_VERSION,
     CATEGORICAL_FEATURES,
     DATA_CARD_PATH,
     DATA_PATH,
@@ -142,14 +143,22 @@ def split_group_indices(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Chia tập dữ liệu theo nhóm bất động sản và mốc thời gian (Grouped Temporal Split 60/15/10/15).
 
-    NGUYÊN LÝ CHỐNG LEAKAGE & PHÂN TÁCH ĐỘC LẬP:
+    NGUYÊN LÝ CHỐNG LEAKAGE & CÔ LẬP NHÓM BẤT ĐỘNG SẢN:
     1. Nhóm toàn bộ tin đăng theo `property_group_id`.
-    2. Lấy ngày đăng bài muộn nhất của từng nhóm và sắp xếp tăng dần theo thời gian.
+    2. Lấy ngày đăng bài muộn nhất của từng nhóm (`latest listing_date per group`) và sắp xếp tăng dần.
     3. Phân chia danh sách nhóm theo tỷ lệ 60/15/10/15:
        - Train (60%): Fit đặc trưng và huấn luyện mô hình.
        - Validation (15%): So sánh đa mô hình, chọn target formulation.
-       - Calibration (10%): Tính phần dư conformal prediction.
-       - Test (15%): Báo cáo đánh giá cuối cùng.
+       - Calibration (10%): Tính phần dư conformal prediction trong log space.
+       - Test (15%): Đánh giá kiểm thử độc lập cuối cùng.
+
+    LƯU Ý QUAN TRỌNG:
+    Phân chia này ưu tiên sự cô lập tuyệt đối của từng nhóm bất động sản (group isolation),
+    được sắp xếp theo ngày đăng muộn nhất quan sát được của nhóm đó. Đây không phải là
+    phân chia dòng thuần túy theo thời gian tuyệt đối (pure chronological row split), bởi vì nếu một
+    bất động sản có nhiều tin đăng trong quá khứ và hiện tại, tất cả các tin đăng của căn nhà đó sẽ
+    được gom chung vào cùng một tập dữ liệu tương ứng với ngày muộn nhất để ngăn chặn triệt để
+    hiện tượng Data Leakage giữa Train, Validation, Calibration và Test.
     """
     ordered_groups = (
         df.groupby("property_group_id", as_index=False)["listing_date"]
@@ -212,14 +221,21 @@ def conformal_quantile(residuals: np.ndarray, coverage: float = 0.8) -> float:
 
 
 def regression_metrics(actual: np.ndarray, prediction: np.ndarray) -> dict[str, float]:
-    """Tính các chỉ số đo lường hiệu năng hồi quy (đơn vị: triệu VND)."""
-    percentage_error = np.abs(prediction - actual) / np.maximum(actual, 1)
+    """Tính các chỉ số đo lường hiệu năng hồi quy chuẩn hóa (đơn vị: triệu VND)."""
+    abs_errors = np.abs(prediction - actual)
+    percentage_error = abs_errors / np.maximum(actual, 1)
+    wape = float(np.sum(abs_errors) / np.maximum(np.sum(actual), 1.0) * 100)
+    denominator = (np.abs(actual) + np.abs(prediction)) / 2.0
+    smape = float(np.mean(abs_errors / np.maximum(denominator, 1.0)) * 100)
+
     return {
         "mae_million": float(mean_absolute_error(actual, prediction)),
         "median_ae_million": float(median_absolute_error(actual, prediction)),
         "rmse_million": float(mean_squared_error(actual, prediction) ** 0.5),
         "r2": float(r2_score(actual, prediction)),
         "mape_percent": float(percentage_error.mean() * 100),
+        "wape_percent": round(wape, 2),
+        "smape_percent": round(smape, 2),
     }
 
 
@@ -440,27 +456,67 @@ def train(data_path: Path = DATA_PATH) -> dict[str, Any]:
         .to_dict()
     )
 
+    # Phân vị huấn luyện (P01 - P99) phục vụ kiểm tra Out-Of-Distribution (OOD) robust
+    training_ranges = {
+        col: [
+            float(features_train[col].min()),
+            float(features_train[col].max()),
+        ]
+        for col in NUMERIC_FEATURES
+        if features_train[col].notna().any()
+    }
+    training_quantiles = {
+        col: [
+            float(np.nanpercentile(features_train[col], 1)),
+            float(np.nanpercentile(features_train[col], 99)),
+        ]
+        for col in NUMERIC_FEATURES
+        if features_train[col].notna().any()
+    }
+
+    # Đóng gói dữ liệu tham chiếu (Train reference listings) cho Comparable Properties Engine
+    ref_df = df_train.copy()
+    ref_df["distance_to_cbd_km"] = features_train["distance_to_cbd_km"].to_numpy()
+    ref_df["input_completeness_score"] = features_train["input_completeness_score"].to_numpy()
+
+    reference_listings = []
+    for _, row in ref_df.iterrows():
+        area_val = float(row["Area"]) if pd.notna(row.get("Area")) and float(row.get("Area")) > 0 else None
+        price_val = float(row["Price"]) if pd.notna(row.get("Price")) and float(row.get("Price")) > 0 else None
+        unit_price = round(price_val / area_val, 1) if (price_val and area_val) else None
+        reference_listings.append(
+            {
+                "property_type": str(row.get("Property Type", "Nhà riêng")),
+                "location_area": str(row.get("location_area", "Unknown")),
+                "area": area_val,
+                "price_million": price_val,
+                "unit_price_million_m2": unit_price,
+                "bedrooms": int(row["Bedrooms"]) if pd.notna(row.get("Bedrooms")) else None,
+                "bathrooms": int(row["Bathrooms"]) if pd.notna(row.get("Bathrooms")) else None,
+                "floors": int(row["Floors"]) if pd.notna(row.get("Floors")) else None,
+                "distance_to_cbd_km": round(float(row["distance_to_cbd_km"]), 2) if pd.notna(row.get("distance_to_cbd_km")) else None,
+                "has_furniture": int(row.get("has_furniture", 0)),
+                "car_alley": int(row.get("car_alley", 0)),
+            }
+        )
+
     artifact = {
         "pipeline": winning_pipeline,
         "model_type": selected_model_name,
         "version": MODEL_VERSION,
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "features": features.columns.tolist(),
         "supported_areas": sorted(df_train["location_area"].unique().tolist()),
         "supported_property_types": sorted(df_train["Property Type"].unique().tolist()),
-        "training_ranges": {
-            col: [
-                float(features_train[col].min()),
-                float(features_train[col].max()),
-            ]
-            for col in NUMERIC_FEATURES
-            if features_train[col].notna().any()
-        },
+        "training_ranges": training_ranges,
+        "training_quantiles": training_quantiles,
         "residual_log_quantile": residual_log_quantile,
         "target_coverage": target_coverage,
         "target_formulation": selected_target_fmt,
         "reference_date": reference_date.isoformat(),
         "split_protocol": "grouped temporal split based on latest listing date per property group (60/15/10/15)",
         "segment_unit_prices": segment_unit_prices,
+        "reference_listings": reference_listings,
     }
 
     winning_test_metrics = regression_metrics(test_actual, test_pred_price)
@@ -483,16 +539,34 @@ def train(data_path: Path = DATA_PATH) -> dict[str, Any]:
         "deployment_reason": deployment_reason,
     }
 
-    # 8. Phân tích sâu Conformal Coverage & Error theo lát cắt dữ liệu (Slices)
+    # 8. Phân tích sâu Prediction Interval Coverage & Error theo các lát cắt dữ liệu (Slices)
     test_result = df_test[["Property Type", "location_area", "Price"]].copy()
     test_result["predicted_price_million"] = test_pred_price
     test_result["absolute_error_million"] = np.abs(test_pred_price - test_actual)
     test_result["in_interval"] = (test_actual >= lower_bound) & (test_actual <= upper_bound)
     test_result["interval_width_million"] = interval_widths
+    test_result["input_completeness_score"] = features_test["input_completeness_score"].to_numpy()
+    test_result["distance_to_cbd_km"] = features_test["distance_to_cbd_km"].to_numpy()
 
     price_bins = [0, 3000, 7000, 15000, np.inf]
     price_labels = ["< 3 tỷ", "3 - 7 tỷ", "7 - 15 tỷ", "> 15 tỷ"]
     test_result["price_range"] = pd.cut(test_result["Price"], bins=price_bins, labels=price_labels)
+
+    completeness_bins = [0, 60, 80, 100.1]
+    completeness_labels = ["< 60% (Thiếu nhiều)", "60 - 80% (Khá)", ">= 80% (Đầy đủ)"]
+    test_result["completeness_range"] = pd.cut(
+        test_result["input_completeness_score"],
+        bins=completeness_bins,
+        labels=completeness_labels,
+    )
+
+    cbd_bins = [0, 5, 10, np.inf]
+    cbd_labels = ["< 5 km (Trung tâm)", "5 - 10 km (Cận trung tâm)", "> 10 km (Ngoại vi)"]
+    test_result["cbd_distance_range"] = pd.cut(
+        test_result["distance_to_cbd_km"],
+        bins=cbd_bins,
+        labels=cbd_labels,
+    )
 
     def summarize_slice(df_group: pd.DataFrame) -> dict[str, Any]:
         count = len(df_group)
@@ -518,6 +592,14 @@ def train(data_path: Path = DATA_PATH) -> dict[str, Any]:
         "by_price_range": {
             str(name): summarize_slice(group)
             for name, group in test_result.groupby("price_range", observed=False)
+        },
+        "by_completeness_range": {
+            str(name): summarize_slice(group)
+            for name, group in test_result.groupby("completeness_range", observed=False)
+        },
+        "by_cbd_distance_range": {
+            str(name): summarize_slice(group)
+            for name, group in test_result.groupby("cbd_distance_range", observed=False)
         },
     }
 

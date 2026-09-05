@@ -2,126 +2,172 @@
   "by_property_type": {
     "Căn hộ chung cư": {
       "count": 3,
-      "mean_mae_million": 1289.21,
-      "median_mae_million": 1745.12,
+      "mean_mae_million": 1355.76,
+      "median_mae_million": 1738.68,
       "interval_coverage": 0.6667,
-      "median_interval_width_million": 4202.84
+      "median_interval_width_million": 4027.91
     },
     "Nhà riêng": {
       "count": 104,
-      "mean_mae_million": 5142.67,
-      "median_mae_million": 2887.72,
+      "mean_mae_million": 5189.32,
+      "median_mae_million": 2978.17,
       "interval_coverage": 0.6827,
-      "median_interval_width_million": 10643.6
+      "median_interval_width_million": 9867.12
     }
   },
   "by_location_area": {
     "Huyện Bình Chánh": {
       "count": 1,
-      "mean_mae_million": 1745.12,
-      "median_mae_million": 1745.12,
+      "mean_mae_million": 1738.68,
+      "median_mae_million": 1738.68,
       "interval_coverage": 0.0,
-      "median_interval_width_million": 3811.94
+      "median_interval_width_million": 3649.92
     },
     "Huyện Cần Giờ": {
       "count": 1,
-      "mean_mae_million": 7852.32,
-      "median_mae_million": 7852.32,
+      "mean_mae_million": 8595.47,
+      "median_mae_million": 8595.47,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 25242.1
+      "median_interval_width_million": 25235.57
     },
     "Quận 1": {
       "count": 2,
-      "mean_mae_million": 6676.94,
-      "median_mae_million": 6676.94,
+      "mean_mae_million": 7603.62,
+      "median_mae_million": 7603.62,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 16576.19
+      "median_interval_width_million": 14652.13
     },
     "Quận 10": {
       "count": 2,
-      "mean_mae_million": 10119.17,
-      "median_mae_million": 10119.17,
+      "mean_mae_million": 10221.42,
+      "median_mae_million": 10221.42,
       "interval_coverage": 0.0,
-      "median_interval_width_million": 11002.42
+      "median_interval_width_million": 10421.25
     },
     "Quận 6": {
       "count": 1,
-      "mean_mae_million": 6556.53,
-      "median_mae_million": 6556.53,
+      "mean_mae_million": 6199.54,
+      "median_mae_million": 6199.54,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 10525.45
+      "median_interval_width_million": 10586.65
     },
     "Quận 7": {
       "count": 1,
-      "mean_mae_million": 1750.93,
-      "median_mae_million": 1750.93,
+      "mean_mae_million": 1961.38,
+      "median_mae_million": 1961.38,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 13219.7
+      "median_interval_width_million": 12402.54
     },
     "Quận Bình Tân": {
       "count": 8,
-      "mean_mae_million": 1457.74,
-      "median_mae_million": 904.52,
+      "mean_mae_million": 1314.43,
+      "median_mae_million": 731.27,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 8938.42
+      "median_interval_width_million": 8615.0
     },
     "Quận Gò Vấp": {
       "count": 1,
-      "mean_mae_million": 773.31,
-      "median_mae_million": 773.31,
+      "mean_mae_million": 1090.46,
+      "median_mae_million": 1090.46,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 12391.52
+      "median_interval_width_million": 12323.61
     },
     "Quận Tân Phú": {
       "count": 4,
-      "mean_mae_million": 2203.19,
-      "median_mae_million": 1769.41,
+      "mean_mae_million": 2323.24,
+      "median_mae_million": 1910.87,
       "interval_coverage": 1.0,
-      "median_interval_width_million": 10124.72
+      "median_interval_width_million": 9587.79
     },
     "TP. Thủ Đức": {
       "count": 11,
-      "mean_mae_million": 4613.32,
-      "median_mae_million": 2838.12,
+      "mean_mae_million": 4604.45,
+      "median_mae_million": 2262.41,
       "interval_coverage": 0.7273,
-      "median_interval_width_million": 6875.44
+      "median_interval_width_million": 7380.21
     },
     "Unknown": {
       "count": 75,
-      "mean_mae_million": 5536.18,
-      "median_mae_million": 3396.47,
+      "mean_mae_million": 5574.18,
+      "median_mae_million": 3389.85,
       "interval_coverage": 0.6267,
-      "median_interval_width_million": 10982.51
+      "median_interval_width_million": 10348.28
     }
   },
   "by_price_range": {
     "< 3 tỷ": {
       "count": 8,
-      "mean_mae_million": 2805.13,
-      "median_mae_million": 2250.44,
+      "mean_mae_million": 2692.98,
+      "median_mae_million": 2063.24,
       "interval_coverage": 0.25,
-      "median_interval_width_million": 5773.66
+      "median_interval_width_million": 5531.35
     },
     "3 - 7 tỷ": {
       "count": 40,
-      "mean_mae_million": 2573.81,
-      "median_mae_million": 1550.36,
+      "mean_mae_million": 2604.39,
+      "median_mae_million": 1218.98,
       "interval_coverage": 0.8,
-      "median_interval_width_million": 8843.98
+      "median_interval_width_million": 8491.21
     },
     "7 - 15 tỷ": {
       "count": 38,
-      "mean_mae_million": 3712.61,
-      "median_mae_million": 3419.76,
+      "mean_mae_million": 3855.04,
+      "median_mae_million": 3458.1,
       "interval_coverage": 0.8421,
-      "median_interval_width_million": 11386.49
+      "median_interval_width_million": 11293.75
     },
     "> 15 tỷ": {
       "count": 21,
-      "mean_mae_million": 12963.45,
-      "median_mae_million": 11748.82,
+      "mean_mae_million": 12930.75,
+      "median_mae_million": 11980.35,
       "interval_coverage": 0.3333,
-      "median_interval_width_million": 17505.18
+      "median_interval_width_million": 16935.14
+    }
+  },
+  "by_completeness_range": {
+    "< 60% (Thiếu nhiều)": {
+      "count": 35,
+      "mean_mae_million": 6794.72,
+      "median_mae_million": 4435.34,
+      "interval_coverage": 0.5714,
+      "median_interval_width_million": 11380.33
+    },
+    "60 - 80% (Khá)": {
+      "count": 55,
+      "mean_mae_million": 4898.27,
+      "median_mae_million": 3452.94,
+      "interval_coverage": 0.6909,
+      "median_interval_width_million": 10348.28
+    },
+    ">= 80% (Đầy đủ)": {
+      "count": 16,
+      "mean_mae_million": 2174.86,
+      "median_mae_million": 1218.98,
+      "interval_coverage": 0.9375,
+      "median_interval_width_million": 8726.95
+    }
+  },
+  "by_cbd_distance_range": {
+    "< 5 km (Trung tâm)": {
+      "count": 1,
+      "mean_mae_million": 4937.77,
+      "median_mae_million": 4937.77,
+      "interval_coverage": 0.0,
+      "median_interval_width_million": 6192.34
+    },
+    "5 - 10 km (Cận trung tâm)": {
+      "count": 34,
+      "mean_mae_million": 5727.95,
+      "median_mae_million": 3579.93,
+      "interval_coverage": 0.7647,
+      "median_interval_width_million": 11657.95
+    },
+    "> 10 km (Ngoại vi)": {
+      "count": 53,
+      "mean_mae_million": 4416.7,
+      "median_mae_million": 2349.14,
+      "interval_coverage": 0.6415,
+      "median_interval_width_million": 9214.94
     }
   }
 }
